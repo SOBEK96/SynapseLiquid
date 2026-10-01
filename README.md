@@ -207,9 +207,14 @@ TELEMETRY_BASE_URL=https://<host>/telemetry ../.venv/bin/python interact_live.py
 
 | # | Entity | Telemetry | Resolved as |
 |---|--------|-----------|-------------|
-| 1 | Aether Infrastructure | ARR $2.5M, 28 mo runway, DSCR ≈ 3.8× | `AAA`, 4% APR, drawn down |
+| 1 | Aether Infrastructure | ARR $2.5M, 28 mo runway, DSCR ≈ 3.8× | `AAA`, 4% APR, drawn down (expected) |
 | 2 | HyperScale Labs | revenue $60k vs opex $180k, ≈ 2 mo runway | `C`, 35% APR, 0.115 GEN ceiling |
 | 3 | ZeroProof Systems | ARR $960k, ≈ 22 mo runway | `PENDING` → live consensus (math ceiling `AA`) |
+
+> **Status:** the contract is deployed and funded (section 1). The three positions above are **not yet seeded on
+> chain**: seeding needs the telemetry feeds hosted at a public https URL, which has not been arranged. The
+> “Resolved as” column is what the shipped fixtures produce in the test suite (`test_telemetry_fixtures.py`), not
+> an on-chain result. Run `interact_live.py seed` once `TELEMETRY_BASE_URL` is set.
 
 ---
 

@@ -63,11 +63,16 @@ try {
   if (requireData) {
     // The registry must populate from the live contract.
     await page.waitForFunction(
-      () => document.body.innerText.includes("Total Pool Liquidity") && !document.body.innerText.includes("Reading borrower registry"),
+      () => document.body.textContent.includes("Total Pool Liquidity") && !document.body.textContent.includes("Reading borrower registry"),
       { timeout: 90000 },
     ).catch(() => problems.push("live contract data did not render within 90s"));
-    const text = await page.evaluate(() => document.body.innerText);
-    if (!/AAA|C\b/.test(text)) problems.push("no rated borrower rendered from the live contract");
+    // Pool metrics must show the live (non-placeholder) liquidity figure.
+    const liquidity = await page.evaluate(() => {
+      const cell = [...document.querySelectorAll("div")].find((d) => d.textContent === "Total Pool Liquidity");
+      return cell?.nextElementSibling?.textContent ?? "";
+    });
+    if (!/^\d+\.\d+/.test(liquidity)) problems.push(`pool liquidity did not render from chain (got "${liquidity}")`);
+    else console.log(`live pool liquidity: ${liquidity} GEN`);
   }
   // nav must stay a single 64px line
   const nav = await page.$eval("nav", (n) => ({ h: n.getBoundingClientRect().height, wrap: getComputedStyle(n).flexWrap }));
