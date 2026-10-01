@@ -17,6 +17,7 @@ locally BEFORE any bond is posted, so a mis-hosted feed cannot cost a bond.
 import hashlib
 import json
 import sys
+import time
 import urllib.request
 
 from lib import (ATTO, BOND, Chain, ChainError, load_accounts, load_deployment, save_deployment,
@@ -89,6 +90,12 @@ def seed_entity(rec: dict, name: str, chain: Chain) -> None:
     print(f"    status={p['status']} rating={p['rating']} rate={p['interest_rate_bps']}bps "
           f"dscr={p['dscr_ratio'] / 100:.2f} runway={p['runway_months']}mo limit={int(p['credit_limit']) / ATTO} GEN")
     if draw and p["status"] == "ACTIVE" and int(p["borrowed_amount"]) == 0:
+        opens = p["drawdown_available_at"]
+        if time.time() < opens:  # mandatory 24h cooldown after assessment
+            print(f"    drawdown opens at {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime(opens))}; "
+                  "re-run `interact_live.py seed` after that")
+            return
+        draw = min(draw, int(p["first_tranche_cap"]))  # first tranche is capped at 50% of the limit
         record(rec, f"drawdown_credit {draw / ATTO} GEN {company}", chain.write("drawdown_credit", [draw], 0, f"draw {slug}"))
         print(f"    drew {draw / ATTO} GEN")
 

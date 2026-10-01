@@ -300,7 +300,7 @@ def test_drawdown_sets_due_date(funded, direct_vm, direct_bob):
     draw(funded, direct_vm, direct_bob, ATTO)
     s = funded.get_borrower_schedule(k)
     p = funded.get_credit_profile(k)
-    assert s["repayment_due"] == p["last_assessment_timestamp"] + 30 * DAY
+    assert s["repayment_due"] == p["last_assessment_timestamp"] + COOLDOWN + 1 + 30 * DAY
 
 
 def test_pool_apy_reflects_weighted_book(funded, direct_vm, direct_bob):
@@ -313,5 +313,5 @@ def test_pool_apy_reflects_weighted_book(funded, direct_vm, direct_bob):
 def test_cumulative_originated_tracks_drawdowns(funded, direct_vm, direct_bob):
     onboard(funded, direct_vm, direct_bob)
     draw(funded, direct_vm, direct_bob, ATTO)
-    draw(funded, direct_vm, direct_bob, ATTO)
-    assert funded.get_pool_metrics()["cumulative_originated"] == str(2 * ATTO)
+    draw(funded, direct_vm, direct_bob, ATTO // 2)  # 1.5 GEN == the 50% first-tranche cap
+    assert funded.get_pool_metrics()["cumulative_originated"] == str(3 * ATTO // 2)

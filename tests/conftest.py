@@ -19,6 +19,7 @@ DEFAULT_LIMIT = 3 * ATTO
 DEFAULT_BOND = bond_for(DEFAULT_LIMIT)  # 0.45 GEN
 URL = "https://telemetry.example.com/borrower.json"
 DAY = 86400
+COOLDOWN = DAY  # assessment -> first drawdown
 YEAR = 365 * DAY
 
 
@@ -124,13 +125,16 @@ def assess(c, vm, borrower_key, caller=None):
     return c.assess_credit_consensus(borrower_key)
 
 
-def onboard(c, vm, who, body=None, limit=3 * ATTO, flag="CLEAN", notches=0, name="Aether Infrastructure"):
+def onboard(c, vm, who, body=None, limit=3 * ATTO, flag="CLEAN", notches=0, name="Aether Infrastructure", cooldown=True):
     """apply + assess against a mocked feed; returns (key, assessment)."""
     feed(vm, telemetry() if body is None else body)
     review(vm, flag, notches)
     apply(c, vm, who, name=name, limit=limit)
     k = key(c, vm, who)
-    return k, assess(c, vm, k)
+    out = assess(c, vm, k)
+    if cooldown and out.get("status") == "ACTIVE":
+        advance(vm, COOLDOWN + 1)  # the mandatory assessment -> first-drawdown cooldown
+    return k, out
 
 
 def advance(vm, seconds):
@@ -139,9 +143,30 @@ def advance(vm, seconds):
     vm.warp((cur + timedelta(seconds=seconds)).astimezone(timezone.utc).isoformat().replace("+00:00", "Z"))
 
 
-def draw(c, vm, who, amount):
+def draw_raw(c, vm, who, amount):
     send(vm, who)
     return c.drawdown_credit(amount)
+
+
+def draw(c, vm, who, amount):
+    """Drawdown that clears the first-tranche cap the way a real borrower must:
+    draw the first tranche, pay one installment, draw the rest -- all at one
+    timestamp, so the final principal and its accrual are exactly `amount`."""
+    send(vm, who)
+    k = c.whoami()
+    try:
+        p, s = c.get_credit_profile(k), c.get_borrower_schedule(k)
+    except Exception:
+        return draw_raw(c, vm, who, amount)
+    cap = int(p["first_tranche_cap"])
+    principal = int(s["principal"])
+    if p["status"] == "ACTIVE" and s["installments_paid"] == 0 and amount > 1 and principal + amount > cap > principal:
+        first = cap - principal
+        draw_raw(c, vm, who, first)
+        m = int(c.get_borrower_schedule(k)["minimum_payment"])
+        repay(c, vm, who, m)
+        amount = amount - first + m
+    return draw_raw(c, vm, who, amount)
 
 
 def repay(c, vm, who, value):

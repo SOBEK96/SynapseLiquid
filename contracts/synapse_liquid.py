@@ -47,6 +47,10 @@ ERR_LLM = "[LLM_ERROR]"
 ERR_BORROWER_MISMATCH = f"{ERR_EXPECTED} ERR_BORROWER_MISMATCH"
 ERR_POOL_CAP_REACHED = f"{ERR_EXPECTED} ERR_POOL_CAP_REACHED"
 ERR_POOL_DELINQUENT = f"{ERR_EXPECTED} ERR_POOL_DELINQUENT"
+ERR_COOLDOWN = f"{ERR_EXPECTED} ERR_COOLDOWN_ACTIVE"
+ERR_TRANCHE_CAP = f"{ERR_EXPECTED} ERR_TRANCHE_CAP"
+ERR_POOL_PAUSED = f"{ERR_EXPECTED} ERR_POOL_PAUSED"
+ERR_BORROWER_CAP = f"{ERR_EXPECTED} ERR_ACTIVE_BORROWER_CAP"
 
 # --- Protocol constants ------------------------------------------------------
 ATTO = 10**18
@@ -54,6 +58,11 @@ UNDERWRITING_BOND = ATTO // 10  # 0.1 GEN: the floor of the proportional bond
 BOND_BPS = 1500  # bond = max(0.1 GEN, 15% of the requested limit)
 MAX_UTILIZATION_BPS = 6000  # protocol-wide ceiling on total_borrowed / total_assets
 LOAN_MATURITY = 365 * 86400  # absolute terminal maturity of drawn debt
+DRAWDOWN_COOLDOWN = 24 * 3600  # assessment -> first drawdown
+FIRST_TRANCHE_BPS = 5000  # until an installment is paid, at most 50% of the limit is outstanding
+MAJOR_LIQUIDATION_BPS = 1000  # a liquidation of >= 10% of pool assets is "major"
+LIQUIDATION_PAUSE = 72 * 3600  # pool-wide drawdown pause after a major liquidation
+MAX_ACTIVE_BORROWERS = 64  # hard bound on the NAV loop
 MIN_DEPOSIT = 10**15  # 0.001 GEN
 SECONDS_PER_YEAR = 365 * 86400
 REPAYMENT_PERIOD = 30 * 86400
@@ -480,6 +489,7 @@ class DebtPosition:
     total_interest_paid: u256
     total_drawn: u256
     loan_expiry: u256  # absolute terminal maturity of the current drawn debt (0 == none)
+    installments_paid: u256  # on-time installments: the "healthy performance" signal for tranche 2
 
 
 class SynapseLiquid(gl.contract.Contract):
@@ -487,6 +497,13 @@ class SynapseLiquid(gl.contract.Contract):
     debts: TreeMap[str, DebtPosition]
     borrower_index: TreeMap[u256, str]
     borrower_count: u256
+    # Registry of borrowers with debt outstanding (1-based slots, swap-remove).
+    # NAV / delinquency loops walk this, never the full application history, so
+    # empty or cancelled applications cost nothing.
+    active_list: TreeMap[u256, str]
+    active_pos: TreeMap[str, u256]
+    active_count: u256
+    drawdown_paused_until: u256
     banned: TreeMap[str, bool]
     lp_shares: TreeMap[str, u256]
     lp_basis: TreeMap[str, u256]  # net GEN deposited (cost basis)
@@ -508,6 +525,8 @@ class SynapseLiquid(gl.contract.Contract):
         self.governor = gl.message.sender_address
         self.usd_per_gen = DEFAULT_USD_PER_GEN
         self.borrower_count = 0
+        self.active_count = 0
+        self.drawdown_paused_until = 0
         self.total_shares = 0
         self.total_assets = 0
         self.total_borrowed = 0
@@ -543,6 +562,8 @@ class SynapseLiquid(gl.contract.Contract):
             "lp_nav": str(self._nav()),
             "delinquent_principal": str(self._delinquent_principal()),
             "max_utilization_bps": MAX_UTILIZATION_BPS,
+            "active_borrowers": int(self.active_count),
+            "drawdown_paused_until": int(self.drawdown_paused_until),
             "total_shares": str(int(self.total_shares)),
             "insurance_reserve": str(int(self.insurance_reserve)),
             "bonds_held": str(int(self.bonds_held)),
@@ -583,6 +604,10 @@ class SynapseLiquid(gl.contract.Contract):
             "requested_limit": str(int(p.requested_limit)),
             "assessment_reason": p.assessment_reason,
             "applied_at": int(p.applied_at),
+            "drawdown_available_at": int(p.last_assessment_timestamp) + DRAWDOWN_COOLDOWN
+            if int(p.last_assessment_timestamp) > 0
+            else 0,
+            "first_tranche_cap": str(int(p.credit_limit) * FIRST_TRANCHE_BPS // 10000),
         }
 
     @gl.public.view
@@ -618,6 +643,7 @@ class SynapseLiquid(gl.contract.Contract):
             "repayment_due": int(d.repayment_due),
             "loan_expiry": expiry,
             "months_left": left,
+            "installments_paid": int(d.installments_paid),
             "minimum_payment": str(min_payment),
             "total_repaid": str(int(d.total_repaid)),
             "total_interest_paid": str(int(d.total_interest_paid)),
@@ -771,7 +797,7 @@ class SynapseLiquid(gl.contract.Contract):
             self.borrower_count = int(self.borrower_count) + 1
             self.debts[key] = DebtPosition(
                 principal=0, accrued_interest=0, last_accrual=0, repayment_due=0,
-                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0,
+                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0, installments_paid=0,
             )
         self.profiles[key] = CreditProfile(
             borrower=gl.message.sender_address,
@@ -865,10 +891,20 @@ class SynapseLiquid(gl.contract.Contract):
         principal = int(d.principal)
         if principal > 0 and int(d.repayment_due) > 0 and now > int(d.repayment_due):
             raise gl.vm.UserError(f"{ERR_EXPECTED} repayment overdue")
+        if now < int(self.drawdown_paused_until):
+            raise gl.vm.UserError(ERR_POOL_PAUSED)  # post-liquidation cool-down
+        if int(d.total_drawn) == 0 and now < int(p.last_assessment_timestamp) + DRAWDOWN_COOLDOWN:
+            raise gl.vm.UserError(ERR_COOLDOWN)  # self-generated telemetry cannot be cashed out at once
         if principal > 0 and now >= int(d.loan_expiry):
             raise gl.vm.UserError(f"{ERR_EXPECTED} loan matured")
         if amount > int(p.credit_limit) - principal:
             raise gl.vm.UserError(f"{ERR_EXPECTED} amount exceeds credit limit")
+        # Tranche cap: until an installment has been paid on time, no more than
+        # 50% of the approved limit may be outstanding.
+        if int(d.installments_paid) == 0 and principal + amount > int(p.credit_limit) * FIRST_TRANCHE_BPS // 10000:
+            raise gl.vm.UserError(ERR_TRANCHE_CAP)
+        if principal == 0 and int(self.active_count) >= MAX_ACTIVE_BORROWERS and key not in self.active_pos:
+            raise gl.vm.UserError(ERR_BORROWER_CAP)
         # Hard protocol-wide ceiling, whoever is borrowing: Sybil identities
         # share one budget, so they cannot walk the pool to 100% utilisation.
         if int(self.total_borrowed) + amount > int(self.total_assets) * MAX_UTILIZATION_BPS // 10000:
@@ -917,9 +953,11 @@ class SynapseLiquid(gl.contract.Contract):
         self._set_principal(key, principal - principal_part)
         p.borrowed_amount = principal - principal_part
         if pay == owed:
+            d.installments_paid = int(d.installments_paid) + 1
             d.repayment_due = 0
             d.loan_expiry = 0
         elif pay >= min_installment:
+            d.installments_paid = int(d.installments_paid) + 1
             # the due date rolls forward but never past the terminal maturity
             d.repayment_due = min(now + REPAYMENT_PERIOD, int(d.loan_expiry))
         refund = value - pay
@@ -993,6 +1031,10 @@ class SynapseLiquid(gl.contract.Contract):
         principal_rec = recovered - interest_rec
         bond_remainder = bond - recovered
 
+        if principal * 10000 >= int(self.total_assets) * MAJOR_LIQUIDATION_BPS:
+            # a major default pauses new drawdowns pool-wide so a Sybil ring
+            # cannot immediately recycle the freed liquidity
+            self.drawdown_paused_until = self._now() + LIQUIDATION_PAUSE
         self.bonds_held = int(self.bonds_held) - bond
         self._distribute_interest(interest_rec)
         loss = principal - principal_rec
@@ -1140,6 +1182,10 @@ class SynapseLiquid(gl.contract.Contract):
         d = self.debts[key]
         old = int(d.principal)
         rate = int(self.profiles[key].interest_rate_bps)
+        if old == 0 and new_principal > 0:
+            self._registry_add(key)
+        elif old > 0 and new_principal == 0:
+            self._registry_remove(key)
         self.total_borrowed = int(self.total_borrowed) - old + new_principal
         self.weighted_rate_principal = int(self.weighted_rate_principal) - old * rate + new_principal * rate
         d.principal = new_principal
@@ -1158,12 +1204,31 @@ class SynapseLiquid(gl.contract.Contract):
             self.cumulative_yield_index = int(self.cumulative_yield_index) + lp * YIELD_SCALE // shares
         self.total_interest_paid = int(self.total_interest_paid) + interest
 
+    def _registry_add(self, key: str) -> None:
+        if key in self.active_pos and int(self.active_pos[key]) > 0:
+            return
+        n = int(self.active_count) + 1
+        self.active_list[n] = key
+        self.active_pos[key] = n
+        self.active_count = n
+
+    def _registry_remove(self, key: str) -> None:
+        if key not in self.active_pos or int(self.active_pos[key]) == 0:
+            return
+        pos, last = int(self.active_pos[key]), int(self.active_count)
+        if pos != last:
+            moved = self.active_list[last]
+            self.active_list[pos] = moved
+            self.active_pos[moved] = pos
+        self.active_pos[key] = 0
+        self.active_count = last - 1
+
     def _delinquent_principal(self) -> int:
-        """Principal of every loan past its due date (O(borrowers))."""
+        """Principal of every loan past its due date: O(active borrowers), bounded by MAX_ACTIVE_BORROWERS."""
         now = self._now()
         total = 0
-        for i in range(int(self.borrower_count)):
-            key = self.borrower_index[i]
+        for i in range(1, int(self.active_count) + 1):
+            key = self.active_list[i]
             d = self.debts[key]
             principal = int(d.principal)
             if principal > 0 and int(d.repayment_due) > 0 and now > int(d.repayment_due):

@@ -47,28 +47,46 @@
           "url": "https://explorer-studio-next.genlayer.com/transactions/0x55213e8e2b42d2ed8890467c65ac7dfeec5307feb181065c75b27e487e63776d"
         }
       ]
+    },
+    {
+      "contract_address": "0xb4c01554C5C30ae3Cc706118460c7887E918650a",
+      "explorer_url": "https://explorer-studio-next.genlayer.com/address/0xb4c01554C5C30ae3Cc706118460c7887E918650a",
+      "source_sha256_at_record": "77afa5b24c2e78e4c8b453cd61f3a2816f650e6ee39e9b1f2b239b35107ec8ce",
+      "deployed_at": "2026-10-01T14:03:21.366513+00:00",
+      "transactions": [
+        {
+          "label": "deploy",
+          "hash": "0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf"
+        },
+        {
+          "label": "seed_liquidity 5.0 GEN",
+          "hash": "0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1"
+        }
+      ]
     }
   ],
   "network": "studio-next",
   "chain_id": 61997,
   "rpc_url": "https://studio-next.genlayer.com/api",
-  "contract_address": "0xb4c01554C5C30ae3Cc706118460c7887E918650a",
-  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0xb4c01554C5C30ae3Cc706118460c7887E918650a",
+  "contract_address": "0x9A43e6660f9a4165F7BD5a911B15Dd2ae2381775",
+  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x9A43e6660f9a4165F7BD5a911B15Dd2ae2381775",
   "source": "contracts/synapse_liquid.py",
   "runner": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
-  "source_sha256_at_record": "77afa5b24c2e78e4c8b453cd61f3a2816f650e6ee39e9b1f2b239b35107ec8ce",
+  "source_sha256_at_record": "d214049a701a267bb1f5adb20895b5f896f7e0a1e2005662001f9d878cf139f4",
   "deployer": "0x54D0352e52434A411c2215441FEAdE4BB6D87C36",
-  "deployed_at": "2026-10-01T14:03:21.366513+00:00",
+  "deployed_at": "2026-10-01T14:33:50.906406+00:00",
   "transactions": [
     {
       "label": "deploy",
-      "hash": "0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf",
-      "url": "https://explorer-studio-next.genlayer.com/transactions/0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf"
+      "hash": "0x44a97bfe25ba931659646af466b4e65729a1b6922cb039089c63747ece45affa",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x44a97bfe25ba931659646af466b4e65729a1b6922cb039089c63747ece45affa"
     },
     {
       "label": "seed_liquidity 5.0 GEN",
-      "hash": "0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1",
-      "url": "https://explorer-studio-next.genlayer.com/transactions/0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1"
+      "hash": "0xa5e2120d43b4ebac974d3e8d55ee7660547706ccdbd2dfa26adf5a6e09fd2204",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0xa5e2120d43b4ebac974d3e8d55ee7660547706ccdbd2dfa26adf5a6e09fd2204"
     }
   ]
 }
