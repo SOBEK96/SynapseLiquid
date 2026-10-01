@@ -81,28 +81,29 @@ def test_cancel_requires_pending_application(c, direct_vm, direct_bob):
 
 
 # ------------------------------------------------ FINDING 2: global utilisation cap
-def test_global_utilization_cap_enforced(c, direct_vm, direct_bob, direct_charlie):
-    """PoC: two borrowers, each inside its own limit, together breach 60%."""
-    onboard(c, direct_vm, direct_bob, limit=3 * ATTO)
-    onboard(c, direct_vm, direct_charlie, limit=5 * ATTO // 4, name="Second Co")
-    draw(c, direct_vm, direct_bob, 5 * ATTO // 2)           # 50% utilised
+def test_global_utilization_cap_enforced(c, direct_vm, direct_bob, direct_charlie, direct_owner):
+    """PoC: three borrowers, each inside its own limit and first tranche, together
+    try to pass 60% of the pool."""
+    onboard(c, direct_vm, direct_bob, limit=3 * ATTO, name="B")
+    onboard(c, direct_vm, direct_charlie, limit=3 * ATTO, name="C")
+    onboard(c, direct_vm, direct_owner, limit=3 * ATTO, name="O")
+    draw(c, direct_vm, direct_bob, LINE)
+    draw(c, direct_vm, direct_charlie, ATTO)                  # 2.5 of 5 GEN
     with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):
-        draw(c, direct_vm, direct_charlie, 6 * ATTO // 10)  # 3.1 / 5 > 60%
-    draw(c, direct_vm, direct_charlie, 5 * ATTO // 10)      # exactly 3.0 / 5 == 60%
+        draw(c, direct_vm, direct_owner, 6 * ATTO // 10)      # 3.1 / 5 > 60%
+    draw(c, direct_vm, direct_owner, ATTO // 2)               # exactly 3.0 / 5 == 60%
     assert c.get_pool_metrics()["utilization_bps"] == MAX_UTIL_BPS
     with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):
-        draw(c, direct_vm, direct_charlie, 1)
+        draw(c, direct_vm, direct_charlie, ATTO // 2)         # inside charlie's own tranche, still refused
 
 
 def test_sybil_swarm_cannot_pass_the_cap(c, direct_vm, direct_bob, direct_charlie, direct_owner, direct_alice):
     for who, name in ((direct_bob, "S1"), (direct_charlie, "S2"), (direct_owner, "S3")):
-        onboard(c, direct_vm, who, limit=ATTO, name=name)
-    draw(c, direct_vm, direct_bob, ATTO)
-    draw(c, direct_vm, direct_charlie, ATTO)
-    draw(c, direct_vm, direct_owner, ATTO)  # 3 / 5 == 60%
-    onboard(c, direct_vm, direct_alice, limit=ATTO, name="S4")
-    with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):
-        draw(c, direct_vm, direct_alice, 1)
+        onboard(c, direct_vm, who, limit=2 * ATTO, name=name)
+        draw(c, direct_vm, who, ATTO)                         # 50% of each 2 GEN line
+    onboard(c, direct_vm, direct_alice, limit=2 * ATTO, name="S4")
+    with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):     # 3 / 5 already == 60%
+        draw(c, direct_vm, direct_alice, MIN_DRAW)
     assert int(c.get_pool_metrics()["borrowed_liquidity"]) <= 3 * ATTO
 
 
@@ -113,21 +114,23 @@ def test_cap_binds_even_when_own_limit_is_larger(c, direct_vm, direct_bob):
         draw(c, direct_vm, direct_bob, 3 * ATTO + 1)
 
 
-def test_repayment_frees_cap_headroom(c, direct_vm, direct_bob, direct_charlie):
-    onboard(c, direct_vm, direct_bob, limit=3 * ATTO)
-    onboard(c, direct_vm, direct_charlie, limit=ATTO, name="Second Co")
-    draw(c, direct_vm, direct_bob, 3 * ATTO)
+def test_repayment_frees_cap_headroom(c, direct_vm, direct_bob, direct_charlie, direct_owner):
+    onboard(c, direct_vm, direct_bob, limit=3 * ATTO, name="B")
+    onboard(c, direct_vm, direct_charlie, limit=3 * ATTO, name="C")
+    onboard(c, direct_vm, direct_owner, limit=ATTO, name="O")
+    draw(c, direct_vm, direct_bob, LINE)
+    draw(c, direct_vm, direct_charlie, LINE)                  # 3.0 / 5 == cap
     with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):
-        draw(c, direct_vm, direct_charlie, 1)
+        draw(c, direct_vm, direct_owner, MIN_DRAW)
     repay(c, direct_vm, direct_bob, ATTO)
-    draw(c, direct_vm, direct_charlie, ATTO)
+    draw(c, direct_vm, direct_owner, MIN_DRAW)
 
 
 # ------------------------------------------------ FINDING 3: bad-debt haircut
 def _setup_delinquent(c, direct_vm, direct_alice, direct_bob, direct_charlie):
     deposit(c, direct_vm, direct_bob, 2 * ATTO)  # alice 5 + bob 2 = 7 GEN; cap 4.2
     onboard(c, direct_vm, direct_charlie, limit=3 * ATTO)
-    draw(c, direct_vm, direct_charlie, 3 * ATTO)
+    draw(c, direct_vm, direct_charlie, LINE)
 
 
 def test_delinquent_loan_bad_debt_haircut(c, direct_vm, direct_alice, direct_bob, direct_charlie):
@@ -138,10 +141,11 @@ def test_delinquent_loan_bad_debt_haircut(c, direct_vm, direct_alice, direct_bob
     assert before == 5 * ATTO
     advance(direct_vm, 31 * DAY)  # past the due date, before liquidation is allowed
     m = c.get_pool_metrics()
-    assert m["delinquent_principal"] == str(3 * ATTO) and c.get_total_assets() == str(4 * ATTO)
+    nav = 7 * ATTO - LINE
+    assert m["delinquent_principal"] == str(LINE) and c.get_total_assets() == str(nav)
     a = c.get_lp_position(key(c, direct_vm, direct_alice))
     b = c.get_lp_position(key(c, direct_vm, direct_bob))
-    assert int(a["value"]) == 5 * ATTO * 4 // 7 and int(b["value"]) == 2 * ATTO * 4 // 7
+    assert int(a["value"]) == 5 * ATTO * nav // (7 * ATTO) and int(b["value"]) == 2 * ATTO * nav // (7 * ATTO)
     # both holders are marked down by the same fraction
     assert int(a["value"]) * 2 * ATTO == pytest.approx(int(b["value"]) * 5 * ATTO, rel=1e-9)
 
@@ -156,7 +160,7 @@ def test_early_exit_cannot_dump_loss_on_late_lp(c, direct_vm, direct_alice, dire
     send(direct_vm, direct_bob)
     got_b = int(c.withdraw_lp_capital(0))
     ratio_b = got_b / (2 * ATTO)
-    assert ratio_a == pytest.approx(4 / 7, rel=1e-6)
+    assert ratio_a == pytest.approx((7 * ATTO - LINE) / (7 * ATTO), rel=1e-6)
     assert ratio_b == pytest.approx(ratio_a, rel=1e-6)  # identical recovery: no first-mover advantage
 
 
@@ -165,7 +169,7 @@ def test_withdrawal_is_capped_by_haircut_value(c, direct_vm, direct_alice, direc
     advance(direct_vm, 31 * DAY)
     send(direct_vm, direct_alice)
     with direct_vm.expect_revert("exceeds position value"):
-        c.withdraw_lp_capital(5 * ATTO * 4 // 7 + 10**12)
+        c.withdraw_lp_capital(5 * ATTO * (7 * ATTO - LINE) // (7 * ATTO) + 10**12)
 
 
 def test_deposits_blocked_while_book_is_marked_down(c, direct_vm, direct_alice, direct_bob, direct_charlie):
@@ -236,7 +240,7 @@ def test_bond_covers_at_least_fifteen_percent_of_the_line(c, direct_vm, direct_b
 
 def test_larger_bond_is_seized_on_default(c, direct_vm, direct_bob, direct_charlie):
     k, _ = onboard(c, direct_vm, direct_bob, limit=3 * ATTO)
-    draw(c, direct_vm, direct_bob, 3 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     advance(direct_vm, 40 * DAY)
     send(direct_vm, direct_charlie)
     out = c.liquidate_borrower(k)
@@ -249,7 +253,7 @@ def test_absolute_maturity_enforced(c, direct_vm, direct_bob):
     """PoC: roll the due date forward forever. The due date is clamped to the
     terminal maturity and the minimum instalment amortises toward it."""
     k, _ = onboard(c, direct_vm, direct_bob)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     expiry = c.get_borrower_schedule(k)["loan_expiry"]
     start = c.get_credit_profile(k)["last_assessment_timestamp"]
     assert expiry == start + (COOLDOWN + 1) + 365 * DAY  # fixed at the first drawdown
@@ -268,7 +272,7 @@ def test_final_instalment_is_the_whole_balance(c, direct_vm, direct_bob):
     """In the last period the minimum instalment equals everything owed, so
     there is nothing left to roll over past the terminal date."""
     k, _ = onboard(c, direct_vm, direct_bob)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     advance(direct_vm, 340 * DAY)
     s = c.get_borrower_schedule(k)
     assert s["months_left"] == 1 and s["minimum_payment"] == s["total_owed"]
@@ -280,7 +284,7 @@ def test_matured_loan_is_delinquent_and_liquidatable(c, direct_vm, direct_bob, d
     """Pay the schedule for 11 months, then stall: the due date cannot roll on,
     and the loan is delinquent at maturity however much was repaid before."""
     k, _ = onboard(c, direct_vm, direct_bob)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     expiry = c.get_borrower_schedule(k)["loan_expiry"]
     for _ in range(11):
         advance(direct_vm, 29 * DAY)
@@ -303,18 +307,18 @@ def test_topup_drawdown_does_not_extend_maturity(c, direct_vm, direct_bob):
     draw(c, direct_vm, direct_bob, ATTO)
     expiry = c.get_borrower_schedule(k)["loan_expiry"]
     advance(direct_vm, 20 * DAY)
-    draw(c, direct_vm, direct_bob, ATTO)
+    draw(c, direct_vm, direct_bob, ATTO // 2)  # 1.5 == the first tranche
     assert c.get_borrower_schedule(k)["loan_expiry"] == expiry
 
 
 def test_minimum_instalment_scales_with_time_left(c, direct_vm, direct_bob):
     k, _ = onboard(c, direct_vm, direct_bob)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     early = c.get_borrower_schedule(k)
     advance(direct_vm, 300 * DAY)
     late = c.get_borrower_schedule(k)
     assert late["months_left"] < early["months_left"]
-    assert int(late["minimum_payment"]) - int(late["accrued_interest"]) > 2 * ATTO // 12
+    assert int(late["minimum_payment"]) - int(late["accrued_interest"]) > LINE // 12
 
 
 def test_full_repayment_clears_maturity_for_a_fresh_cycle(c, direct_vm, direct_bob):
@@ -417,25 +421,33 @@ def test_active_borrower_set_is_hard_bounded(direct_vm, direct_deploy, direct_al
     deposit(c, direct_vm, direct_alice, 200 * ATTO)
     who = [bytes([i + 1]) * 20 for i in range(65)]
     for i, w in enumerate(who):
-        onboard(c, direct_vm, w, limit=ATTO // 5, name=f"Co{i}", cooldown=False)
+        onboard(c, direct_vm, w, limit=ATTO, name=f"Co{i}", cooldown=False)
     advance(direct_vm, COOLDOWN + 1)
     for w in who[:64]:
-        draw_raw(c, direct_vm, w, ATTO // 10)
+        draw_raw(c, direct_vm, w, MIN_DRAW)
     assert c.get_pool_metrics()["active_borrowers"] == 64
     with direct_vm.expect_revert("ERR_ACTIVE_BORROWER_CAP"):
-        draw_raw(c, direct_vm, who[64], ATTO // 10)
+        draw_raw(c, direct_vm, who[64], MIN_DRAW)
+    # a borrower who repays in full is evicted at once and frees the slot...
+    repay(c, direct_vm, who[0], int(c.get_borrower_schedule(key(c, direct_vm, who[0]))["total_owed"]))
+    assert c.get_pool_metrics()["active_borrowers"] == 63
+    draw_raw(c, direct_vm, who[64], MIN_DRAW)
+    assert c.get_pool_metrics()["active_borrowers"] == 64
+    # ...and the evicted borrower cannot sneak back past the bound (stale-slot regression)
+    with direct_vm.expect_revert("ERR_ACTIVE_BORROWER_CAP"):
+        draw_raw(c, direct_vm, who[0], MIN_DRAW)
 
 
 # ============ FINAL AUDIT: 24h cooldown between assessment and first drawdown ============
 def test_cooldown_blocks_immediate_drawdown(c, direct_vm, direct_bob):
     k, _ = onboard(c, direct_vm, direct_bob, cooldown=False)
     with direct_vm.expect_revert("ERR_COOLDOWN_ACTIVE"):
-        draw_raw(c, direct_vm, direct_bob, ATTO // 10)
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
     advance(direct_vm, COOLDOWN - 60)
     with direct_vm.expect_revert("ERR_COOLDOWN_ACTIVE"):
-        draw_raw(c, direct_vm, direct_bob, ATTO // 10)
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
     advance(direct_vm, 61)
-    draw_raw(c, direct_vm, direct_bob, ATTO // 10)
+    draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
 
 
 def test_profile_reports_when_drawdown_opens(c, direct_vm, direct_bob):
@@ -449,7 +461,7 @@ def test_reassessment_restarts_the_cooldown(c, direct_vm, direct_bob):
     feed(direct_vm, telemetry())
     assess(c, direct_vm, k)  # fresh consensus before any drawdown
     with direct_vm.expect_revert("ERR_COOLDOWN_ACTIVE"):
-        draw_raw(c, direct_vm, direct_bob, ATTO // 10)
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
 
 
 def test_cooldown_is_for_the_initial_drawdown_only(c, direct_vm, direct_bob):
@@ -482,11 +494,45 @@ def test_second_tranche_requires_a_paid_installment(c, direct_vm, direct_bob):
     assert c.get_borrower_schedule(k)["installments_paid"] == 0
     with direct_vm.expect_revert("ERR_TRANCHE_CAP"):
         draw_raw(c, direct_vm, direct_bob, 1)
+
+
+def test_tranche_two_blocked_for_a_full_cycle_after_first_drawdown(c, direct_vm, direct_bob):
+    """PoC (audit): draw the first tranche, immediately pay a minimum installment to
+    bump installments_paid, and take the rest seconds later. Now refused."""
+    k, out = onboard(c, direct_vm, direct_bob)
+    limit = int(out["credit_limit"])
+    draw_raw(c, direct_vm, direct_bob, limit // 2)
     repay(c, direct_vm, direct_bob, int(c.get_borrower_schedule(k)["minimum_payment"]))
-    assert c.get_borrower_schedule(k)["installments_paid"] == 1
+    assert c.get_borrower_schedule(k)["installments_paid"] == 1  # the bypass attempt
+    with direct_vm.expect_revert("ERR_TRANCHE_COOLDOWN_ACTIVE"):
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
+    advance(direct_vm, PAYMENT_CYCLE - 60)  # one minute short of a full cycle
+    with direct_vm.expect_revert("ERR_TRANCHE_COOLDOWN_ACTIVE"):
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
+    advance(direct_vm, 61)
+    s = c.get_borrower_schedule(k)
+    assert s["tranche_two_opens_at"] == s["first_draw_at"] + PAYMENT_CYCLE
+    repay(c, direct_vm, direct_bob, int(s["minimum_payment"]))  # stay current across the cycle
     owed = int(c.get_borrower_schedule(k)["principal"])
-    draw_raw(c, direct_vm, direct_bob, limit - owed)  # now the rest of the line is available
+    draw_raw(c, direct_vm, direct_bob, limit - owed)  # tranche 2: the rest of the line
     assert c.get_credit_profile(k)["borrowed_amount"] == str(limit)
+
+
+def test_tranche_time_lock_needs_both_cycle_and_installment(c, direct_vm, direct_bob):
+    k, out = onboard(c, direct_vm, direct_bob)
+    draw_raw(c, direct_vm, direct_bob, int(out["credit_limit"]) // 2)
+    advance(direct_vm, PAYMENT_CYCLE + 1)
+    # a full cycle has elapsed, but nothing was ever paid -> overdue and capped
+    with direct_vm.expect_revert("repayment overdue"):
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
+
+
+def test_second_tranche_helper_path_is_the_only_way(c, direct_vm, direct_bob):
+    k, out = onboard(c, direct_vm, direct_bob)
+    limit = int(out["credit_limit"])
+    draw_raw(c, direct_vm, direct_bob, limit // 2)
+    draw_second_tranche(c, direct_vm, direct_bob, MIN_DRAW)
+    assert int(c.get_borrower_schedule(k)["principal"]) > limit // 2 - limit // 12
 
 
 def test_delinquent_borrower_cannot_open_the_second_tranche(c, direct_vm, direct_bob):
@@ -496,7 +542,7 @@ def test_delinquent_borrower_cannot_open_the_second_tranche(c, direct_vm, direct
     repay(c, direct_vm, direct_bob, int(c.get_borrower_schedule(k)["minimum_payment"]))
     advance(direct_vm, 31 * DAY)  # misses the next due date
     with direct_vm.expect_revert("repayment overdue"):
-        draw_raw(c, direct_vm, direct_bob, 1)
+        draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
 
 
 def test_sybil_extraction_yields_half_per_identity(c, direct_vm, direct_bob, direct_charlie):
@@ -522,20 +568,56 @@ def test_major_liquidation_pauses_new_drawdowns(c, direct_vm, direct_bob, direct
     until = c.get_pool_metrics()["drawdown_paused_until"]
     assert until > 0
     with direct_vm.expect_revert("ERR_POOL_PAUSED"):
-        draw_raw(c, direct_vm, direct_charlie, ATTO // 10)  # no instant recycling of the freed liquidity
+        draw_raw(c, direct_vm, direct_charlie, MIN_DRAW)  # no instant recycling of the freed liquidity
     advance(direct_vm, 72 * 3600 + 1)
-    draw_raw(c, direct_vm, direct_charlie, ATTO // 10)
+    draw_raw(c, direct_vm, direct_charlie, MIN_DRAW)
 
 
-def test_minor_liquidation_does_not_pause(c, direct_vm, direct_bob, direct_charlie, direct_owner):
-    kb, _ = onboard(c, direct_vm, direct_bob, limit=ATTO // 4, name="Small")
+def test_minor_liquidation_does_not_pause(c, direct_vm, direct_alice, direct_bob, direct_charlie, direct_owner):
+    deposit(c, direct_vm, direct_alice, 5 * ATTO)  # 10 GEN pool: a 0.5 GEN default is 5%
+    kb, _ = onboard(c, direct_vm, direct_bob, limit=ATTO, name="Small")
     onboard(c, direct_vm, direct_charlie, limit=ATTO, name="Next")
-    draw(c, direct_vm, direct_bob, ATTO // 8)  # 2.5% of the pool
+    draw(c, direct_vm, direct_bob, MIN_DRAW)
     advance(direct_vm, 40 * DAY)
     send(direct_vm, direct_owner)
     c.liquidate_borrower(kb)
     assert c.get_pool_metrics()["drawdown_paused_until"] == 0
-    draw_raw(c, direct_vm, direct_charlie, ATTO // 10)
+    draw_raw(c, direct_vm, direct_charlie, MIN_DRAW)
+
+
+# ============ FINAL AUDIT 3: dust floor and slot eviction ============
+def test_dust_drawdown_is_refused(c, direct_vm, direct_bob):
+    k, _ = onboard(c, direct_vm, direct_bob, limit=ATTO)
+    for dust in (1, 10**15, MIN_DRAW - 1):
+        with direct_vm.expect_revert("ERR_DRAWDOWN_TOO_SMALL"):
+            draw_raw(c, direct_vm, direct_bob, dust)
+    assert c.get_pool_metrics()["active_borrowers"] == 0  # no slot was squatted
+    draw_raw(c, direct_vm, direct_bob, MIN_DRAW)  # exactly the floor is fine
+    assert c.get_pool_metrics()["active_borrowers"] == 1
+
+
+def test_lines_too_small_for_the_floor_cannot_squat_a_slot(c, direct_vm, direct_bob):
+    k, out = onboard(c, direct_vm, direct_bob, body=hyperscale(), limit=ATTO, name="Tiny")
+    assert int(out["credit_limit"]) < MIN_DRAW  # a C-rated 0.115 GEN line
+    with direct_vm.expect_revert():
+        draw_raw(c, direct_vm, direct_bob, int(out["credit_limit"]) // 2)
+    assert c.get_pool_metrics()["active_borrowers"] == 0
+
+
+def test_borrower_evicted_the_moment_debt_hits_zero(c, direct_vm, direct_bob):
+    k, _ = onboard(c, direct_vm, direct_bob)
+    draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
+    assert c.get_pool_metrics()["active_borrowers"] == 1
+    repay(c, direct_vm, direct_bob, int(c.get_borrower_schedule(k)["total_owed"]))
+    assert c.get_pool_metrics()["active_borrowers"] == 0
+    assert c.get_credit_profile(k)["borrowed_amount"] == "0"
+
+
+def test_partial_repayment_keeps_the_slot(c, direct_vm, direct_bob):
+    k, _ = onboard(c, direct_vm, direct_bob)
+    draw_raw(c, direct_vm, direct_bob, MIN_DRAW)
+    repay(c, direct_vm, direct_bob, MIN_DRAW // 2)
+    assert c.get_pool_metrics()["active_borrowers"] == 1
 
 
 def test_pause_does_not_block_repayment_or_lp_exit(c, direct_vm, direct_alice, direct_bob, direct_charlie, direct_owner):

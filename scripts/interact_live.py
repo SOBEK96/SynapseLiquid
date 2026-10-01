@@ -14,8 +14,10 @@ $TELEMETRY_BASE_URL/<name>.json; each is fetched and its proof digest verified
 locally BEFORE any bond is posted, so a mis-hosted feed cannot cost a bond.
 """
 
+import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 import urllib.request
@@ -110,7 +112,13 @@ def status(chain: Chain) -> None:
 
 
 def main() -> None:
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "status"
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("cmd", nargs="?", default="status", choices=["seed", "assess-zeroproof", "status"])
+    ap.add_argument("--base-url", help="public https folder serving <slug>.json (overrides TELEMETRY_BASE_URL)")
+    args = ap.parse_args()
+    cmd = args.cmd
+    if args.base_url:
+        os.environ["TELEMETRY_BASE_URL"] = args.base_url
     rec = load_deployment()
     if not rec.get("contract_address"):
         raise SystemExit("no deployment recorded: run scripts/deploy.py first")

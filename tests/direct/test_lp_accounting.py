@@ -79,17 +79,17 @@ def test_negative_withdraw_reverts(direct_vm, pool, direct_alice):
 def test_withdraw_blocked_by_lent_liquidity(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 3 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     send(direct_vm, direct_alice)
     with direct_vm.expect_revert("insufficient pool liquidity"):
         pool.withdraw_lp_capital(4 * ATTO)
-    assert pool.withdraw_lp_capital(0) == str(2 * ATTO)  # max available
+    assert pool.withdraw_lp_capital(0) == str(5 * ATTO - LINE)  # max available
 
 
 def test_interest_raises_lp_value_not_shares(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 2 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     advance(direct_vm, 90 * DAY)
     repay(pool, direct_vm, direct_bob, ATTO // 4)
     p = pool.get_lp_position(key(pool, direct_vm, direct_alice))
@@ -99,7 +99,7 @@ def test_interest_raises_lp_value_not_shares(direct_vm, pool, direct_alice, dire
 def test_interest_split_90_10(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 2 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     advance(direct_vm, 30 * DAY)
     out = repay(pool, direct_vm, direct_bob, ATTO // 100)
     interest = int(out["interest_paid"])
@@ -137,7 +137,7 @@ def test_late_lp_does_not_capture_earlier_yield(direct_vm, pool, direct_alice, d
 def test_yield_index_is_monotonic(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 2 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     seen = [int(pool.get_pool_metrics()["cumulative_yield_index"])]
     for _ in range(4):
         advance(direct_vm, 30 * DAY)
@@ -149,7 +149,7 @@ def test_yield_index_is_monotonic(direct_vm, pool, direct_alice, direct_bob):
 def test_withdrawal_after_yield_exceeds_deposit(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 2 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     advance(direct_vm, 365 * DAY)
     repay(pool, direct_vm, direct_bob, ATTO // 2)
     repay(pool, direct_vm, direct_bob, int(pool.get_borrower_schedule(key(pool, direct_vm, direct_bob))["total_owed"]))
@@ -172,10 +172,10 @@ def test_sum_of_lp_values_never_exceeds_assets(direct_vm, pool, direct_alice, di
 def test_cash_invariant_through_lifecycle(direct_vm, pool, direct_alice, direct_bob):
     deposit(pool, direct_vm, direct_alice, 5 * ATTO)
     onboard(pool, direct_vm, direct_bob)
-    draw(pool, direct_vm, direct_bob, 2 * ATTO)
+    draw(pool, direct_vm, direct_bob, LINE)
     advance(direct_vm, 60 * DAY)
     out = repay(pool, direct_vm, direct_bob, ATTO // 3)
     m = pool.get_pool_metrics()
     # cash in = LP deposits + bond + repayments - drawdown
-    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - 2 * ATTO
+    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - LINE
     assert expected_balance(pool) == cash_in

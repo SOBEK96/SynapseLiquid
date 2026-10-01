@@ -13,7 +13,7 @@ def c(direct_vm, direct_deploy, direct_alice):
 @pytest.fixture
 def line(c, direct_vm, direct_bob):
     k, _ = onboard(c, direct_vm, direct_bob)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)
+    draw(c, direct_vm, direct_bob, LINE)
     return k
 
 
@@ -21,7 +21,7 @@ def line(c, direct_vm, direct_bob):
 def test_simple_interest_after_one_year(c, direct_vm, line):
     advance(direct_vm, YEAR)
     s = c.get_borrower_schedule(line)
-    assert int(s["accrued_interest"]) == 2 * ATTO * 400 // 10000  # 4% APR
+    assert int(s["accrued_interest"]) == LINE * 400 // 10000  # 4% APR
 
 
 def test_interest_is_linear_in_time(c, direct_vm, line):
@@ -37,21 +37,26 @@ def test_no_interest_without_time(c, line):
 
 
 def test_interest_scales_with_rating_rate(c, direct_vm, direct_bob, direct_charlie):
+    # an AAA line and a BB line (no on-chain corroboration caps the rating at BB)
     k1, _ = onboard(c, direct_vm, direct_bob, limit=ATTO)
-    k2, _ = onboard(c, direct_vm, direct_charlie, body=hyperscale(), limit=ATTO, name="HyperScale")
-    draw(c, direct_vm, direct_bob, ATTO // 10)
-    draw(c, direct_vm, direct_charlie, ATTO // 10)
+    bb = telemetry(transactions=None, proof_sha256=None, verified_onchain_inflows_usd=None)
+    k2, out = onboard(c, direct_vm, direct_charlie, body=bb, limit=ATTO, name="Second")
+    assert out["rating"] == "BB"
+    draw(c, direct_vm, direct_bob, MIN_DRAW)
+    draw(c, direct_vm, direct_charlie, MIN_DRAW)
     advance(direct_vm, YEAR)
     i1 = int(c.get_borrower_schedule(k1)["accrued_interest"])
     i2 = int(c.get_borrower_schedule(k2)["accrued_interest"])
-    assert i1 == ATTO // 10 * 400 // 10000 and i2 == ATTO // 10 * 3500 // 10000
+    assert i1 == MIN_DRAW * 400 // 10000 and i2 == MIN_DRAW * 1800 // 10000
 
 
-def test_accrual_persists_across_second_drawdown(c, direct_vm, direct_bob, line):
+def test_accrual_persists_across_second_drawdown(c, direct_vm, direct_bob):
+    k, _ = onboard(c, direct_vm, direct_bob)
+    draw(c, direct_vm, direct_bob, MIN_DRAW)
     advance(direct_vm, 30 * DAY)
-    draw(c, direct_vm, direct_bob, ATTO // 2)
-    s = c.get_borrower_schedule(line)
-    assert int(s["accrued_interest"]) == 2 * ATTO * 400 * 30 * DAY // (10000 * YEAR)
+    draw(c, direct_vm, direct_bob, MIN_DRAW)  # 1.0 GEN outstanding, still inside the 1.5 first tranche
+    s = c.get_borrower_schedule(k)
+    assert int(s["accrued_interest"]) == MIN_DRAW * 400 * 30 * DAY // (10000 * YEAR)
 
 
 # ------------------------------------------------------------------- servicing
@@ -123,14 +128,14 @@ def test_service_by_stranger_reverts(c, direct_vm, direct_charlie, line):
 
 def test_repayment_restores_borrowing_capacity(c, direct_vm, direct_bob, line):
     repay(c, direct_vm, direct_bob, ATTO)
-    draw(c, direct_vm, direct_bob, 2 * ATTO)  # limit 3, owes 1 -> may draw 2
-    assert c.get_credit_profile(line)["borrowed_amount"] == str(3 * ATTO)
+    draw(c, direct_vm, direct_bob, MIN_DRAW)  # owes 0.5 of the 1.5 first tranche -> may draw 0.5 again
+    assert c.get_credit_profile(line)["borrowed_amount"] == str(LINE - ATTO + MIN_DRAW)
 
 
 def test_amortisation_schedule_sums_to_principal(c, line):
     s = c.get_borrower_schedule(line)
     assert len(s["schedule"]) == 12
-    assert sum(int(r["principal"]) for r in s["schedule"]) == 2 * ATTO
+    assert sum(int(r["principal"]) for r in s["schedule"]) == LINE
     assert s["schedule"][-1]["balance"] == "0"
 
 
@@ -142,7 +147,7 @@ def test_amortisation_interest_declines(c, line):
 def test_cash_invariant_after_repayments(c, direct_vm, direct_bob, line):
     advance(direct_vm, 45 * DAY)
     out = repay(c, direct_vm, direct_bob, ATTO // 2)
-    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - 2 * ATTO
+    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - LINE
     assert expected_balance(c) == cash_in
 
 
@@ -213,7 +218,7 @@ def test_insolvent_borrower_liquidated_after_grace(c, direct_vm, direct_charlie,
     out = c.liquidate_borrower(line)
     p = c.get_credit_profile(line)
     assert p["status"] == "DEFAULTED" and p["rating"] == "DEFAULT" and p["credit_limit"] == "0"
-    assert out["principal"] == str(2 * ATTO)
+    assert out["principal"] == str(LINE)
 
 
 def test_liquidation_seizes_bond_first(c, direct_vm, direct_charlie, line):
@@ -229,9 +234,9 @@ def test_liquidation_loss_waterfall_exact(c, direct_vm, direct_charlie, line):
     send(direct_vm, direct_charlie)
     out = c.liquidate_borrower(line)
     m = c.get_pool_metrics()
-    interest = 2 * ATTO * 400 * 38 * DAY // (10000 * YEAR)
+    interest = LINE * 400 * 38 * DAY // (10000 * YEAR)
     reserve_cut = interest * 1000 // 10000
-    loss = 2 * ATTO - (DEFAULT_BOND - interest)  # bond covers interest first, then principal
+    loss = LINE - (DEFAULT_BOND - interest)  # bond covers interest first, then principal
     covered = min(reserve_cut, loss)  # the 10% interest cut seeds the reserve first
     assert int(out["insurance_covered"]) == covered
     assert int(out["lp_loss"]) == loss - covered
@@ -241,13 +246,13 @@ def test_liquidation_loss_waterfall_exact(c, direct_vm, direct_charlie, line):
 def test_liquidation_insurance_absorbs_first(c, direct_vm, direct_alice, direct_bob, direct_charlie):
     # an earlier slash seeds the reserve
     k0, o0 = onboard(c, direct_vm, direct_charlie, body=telemetry(monthly_revenue_usd=-1))
-    k, _ = onboard(c, direct_vm, direct_bob, limit=ATTO // 2)
-    draw(c, direct_vm, direct_bob, ATTO // 2)
+    k, _ = onboard(c, direct_vm, direct_bob, limit=ATTO)
+    draw(c, direct_vm, direct_bob, MIN_DRAW)
     advance(direct_vm, 40 * DAY)
     send(direct_vm, direct_alice)
     out = c.liquidate_borrower(k)
     assert int(out["insurance_covered"]) > 0
-    assert int(out["lp_loss"]) + int(out["insurance_covered"]) <= ATTO // 2
+    assert int(out["lp_loss"]) + int(out["insurance_covered"]) <= MIN_DRAW
 
 
 def test_liquidation_preserves_cash_invariant(c, direct_vm, direct_charlie, line):
@@ -255,7 +260,7 @@ def test_liquidation_preserves_cash_invariant(c, direct_vm, direct_charlie, line
     send(direct_vm, direct_charlie)
     c.liquidate_borrower(line)
     # cash held: deposits + bond - drawdown (nothing was repaid)
-    assert expected_balance(c) == 5 * ATTO + DEFAULT_BOND - 2 * ATTO
+    assert expected_balance(c) == 5 * ATTO + DEFAULT_BOND - LINE
     m = c.get_pool_metrics()
     assert m["borrowed_liquidity"] == "0" and m["bonds_held"] == "0"
 

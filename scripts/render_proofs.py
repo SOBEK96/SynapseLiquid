@@ -17,7 +17,7 @@ block = "\n".join(
         f"- **Source SHA-256 (`contracts/synapse_liquid.py`):** `{dep['source_sha256_at_record']}`",
         f"- **Runner:** `{dep['runner']}`",
         f"- **Deployed:** {dep['deployed_at']}",
-        *[f"- **Superseded (pre-audit) contract:** [`{d['contract_address']}`]({d['explorer_url']}) — do not use"
+        *[f"- **Superseded contract:** [`{d['contract_address']}`]({d['explorer_url']}) — do not use"
           for d in dep.get("previous_deployments", [])],
         "",
         *rows,

@@ -232,15 +232,16 @@ def test_prompt_isolates_untrusted_narrative(funded, direct_vm, direct_bob):
 
 # ------------------------------------------------------------------- rate curve
 def test_rate_surcharge_above_kink(funded, direct_vm, direct_alice, direct_bob, direct_charlie):
-    """The 60% global cap means drawdowns alone never pass the 80% kink; it is
-    crossed when LPs exit and shrink the denominator."""
+    """The 60% cap and 50% first tranche mean drawdowns alone never pass the 80%
+    kink; it is crossed when LPs exit and shrink the denominator."""
     onboard(funded, direct_vm, direct_bob, limit=3 * ATTO)
-    draw(funded, direct_vm, direct_bob, 3 * ATTO)
+    draw(funded, direct_vm, direct_bob, LINE)
     send(direct_vm, direct_alice)
-    funded.withdraw_lp_capital(3 * ATTO // 2)  # 3 lent of 3.5 -> 85.7%
-    assert funded.get_pool_metrics()["utilization_bps"] == 8571
+    funded.withdraw_lp_capital(16 * ATTO // 5)  # 5 -> 1.8 GEN: 1.5 lent of 1.8
+    util = funded.get_pool_metrics()["utilization_bps"]
+    assert util == 8333
     out = onboard(funded, direct_vm, direct_charlie, name="Second Co", limit=ATTO // 2)[1]
-    assert out["rating"] == "AAA" and out["interest_rate_bps"] == 400 + (8571 - 8000) * 500 // 2000
+    assert out["rating"] == "AAA" and out["interest_rate_bps"] == 400 + (util - 8000) * 500 // 2000
 
 
 def test_no_surcharge_at_or_below_kink(funded, direct_vm, direct_bob):
@@ -249,12 +250,12 @@ def test_no_surcharge_at_or_below_kink(funded, direct_vm, direct_bob):
 
 
 # -------------------------------------------------------------------- drawdown
-def test_drawdown_up_to_limit(funded, direct_vm, direct_bob):
+def test_drawdown_up_to_first_tranche(funded, direct_vm, direct_bob):
     k, _ = onboard(funded, direct_vm, direct_bob)
-    draw(funded, direct_vm, direct_bob, 3 * ATTO)
-    assert funded.get_credit_profile(k)["borrowed_amount"] == str(3 * ATTO)
+    draw(funded, direct_vm, direct_bob, LINE)
+    assert funded.get_credit_profile(k)["borrowed_amount"] == str(LINE)
     m = funded.get_pool_metrics()
-    assert m["available_liquidity"] == str(2 * ATTO) and m["utilization_bps"] == 6000
+    assert m["available_liquidity"] == str(5 * ATTO - LINE) and m["utilization_bps"] == 3000
 
 
 def test_drawdown_over_limit_reverts(funded, direct_vm, direct_bob):
@@ -265,9 +266,9 @@ def test_drawdown_over_limit_reverts(funded, direct_vm, direct_bob):
 
 def test_drawdown_cumulative_over_limit_reverts(funded, direct_vm, direct_bob):
     onboard(funded, direct_vm, direct_bob)
-    draw(funded, direct_vm, direct_bob, 2 * ATTO)
+    draw(funded, direct_vm, direct_bob, ATTO)
     with direct_vm.expect_revert("exceeds credit limit"):
-        draw(funded, direct_vm, direct_bob, 2 * ATTO)
+        draw(funded, direct_vm, direct_bob, 2 * ATTO + 1)
 
 
 def test_drawdown_pending_reverts(funded, direct_vm, direct_bob):
@@ -291,8 +292,8 @@ def test_drawdown_limited_by_pool_liquidity(funded, direct_vm, direct_alice, dir
     onboard(funded, direct_vm, direct_bob)
     send(direct_vm, direct_alice)
     funded.withdraw_lp_capital(3 * ATTO)  # 2 GEN left, limit is 3 GEN
-    with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):  # 3 GEN > 60% of the remaining 2
-        draw(funded, direct_vm, direct_bob, 3 * ATTO)
+    with direct_vm.expect_revert("ERR_POOL_CAP_REACHED"):  # 1.5 GEN > 60% of the remaining 2
+        draw(funded, direct_vm, direct_bob, LINE)
 
 
 def test_drawdown_sets_due_date(funded, direct_vm, direct_bob):
@@ -305,9 +306,9 @@ def test_drawdown_sets_due_date(funded, direct_vm, direct_bob):
 
 def test_pool_apy_reflects_weighted_book(funded, direct_vm, direct_bob):
     onboard(funded, direct_vm, direct_bob)
-    draw(funded, direct_vm, direct_bob, 2 * ATTO)
-    # 2/5 utilised at 4%, 90% passed to LPs: 0.4*0.04*0.9 = 1.44% = 144 bps
-    assert funded.get_pool_metrics()["lp_apy_bps"] == 144
+    draw(funded, direct_vm, direct_bob, LINE)
+    # 1.5/5 utilised at 4%, 90% passed to LPs: 0.3*0.04*0.9 = 1.08% = 108 bps
+    assert funded.get_pool_metrics()["lp_apy_bps"] == 108
 
 
 def test_cumulative_originated_tracks_drawdowns(funded, direct_vm, direct_bob):

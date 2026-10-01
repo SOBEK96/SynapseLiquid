@@ -20,6 +20,9 @@ DEFAULT_BOND = bond_for(DEFAULT_LIMIT)  # 0.45 GEN
 URL = "https://telemetry.example.com/borrower.json"
 DAY = 86400
 COOLDOWN = DAY  # assessment -> first drawdown
+PAYMENT_CYCLE = 30 * DAY  # first drawdown -> tranche 2
+MIN_DRAW = ATTO // 2  # drawdown floor
+LINE = 3 * ATTO // 2  # a 3 GEN line drawn to its 50% first tranche
 YEAR = 365 * DAY
 
 
@@ -149,23 +152,18 @@ def draw_raw(c, vm, who, amount):
 
 
 def draw(c, vm, who, amount):
-    """Drawdown that clears the first-tranche cap the way a real borrower must:
-    draw the first tranche, pay one installment, draw the rest -- all at one
-    timestamp, so the final principal and its accrual are exactly `amount`."""
-    send(vm, who)
-    k = c.whoami()
-    try:
-        p, s = c.get_credit_profile(k), c.get_borrower_schedule(k)
-    except Exception:
-        return draw_raw(c, vm, who, amount)
-    cap = int(p["first_tranche_cap"])
-    principal = int(s["principal"])
-    if p["status"] == "ACTIVE" and s["installments_paid"] == 0 and amount > 1 and principal + amount > cap > principal:
-        first = cap - principal
-        draw_raw(c, vm, who, first)
-        m = int(c.get_borrower_schedule(k)["minimum_payment"])
-        repay(c, vm, who, m)
-        amount = amount - first + m
+    """Plain drawdown. Existing lines are sized so the draw fits the 50% first
+    tranche; tests that need more use `draw_second_tranche`."""
+    return draw_raw(c, vm, who, amount)
+
+
+def draw_second_tranche(c, vm, who, amount):
+    """Open tranche 2 the only legitimate way: pay one installment, then wait out
+    the full 30-day cycle since the first drawdown, staying current."""
+    k = key(c, vm, who)
+    repay(c, vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))
+    advance(vm, PAYMENT_CYCLE + 1)
+    repay(c, vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))  # stay current
     return draw_raw(c, vm, who, amount)
 
 

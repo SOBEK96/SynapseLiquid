@@ -49,6 +49,8 @@ ERR_POOL_CAP_REACHED = f"{ERR_EXPECTED} ERR_POOL_CAP_REACHED"
 ERR_POOL_DELINQUENT = f"{ERR_EXPECTED} ERR_POOL_DELINQUENT"
 ERR_COOLDOWN = f"{ERR_EXPECTED} ERR_COOLDOWN_ACTIVE"
 ERR_TRANCHE_CAP = f"{ERR_EXPECTED} ERR_TRANCHE_CAP"
+ERR_TRANCHE_COOLDOWN = f"{ERR_EXPECTED} ERR_TRANCHE_COOLDOWN_ACTIVE"
+ERR_DRAWDOWN_TOO_SMALL = f"{ERR_EXPECTED} ERR_DRAWDOWN_TOO_SMALL"
 ERR_POOL_PAUSED = f"{ERR_EXPECTED} ERR_POOL_PAUSED"
 ERR_BORROWER_CAP = f"{ERR_EXPECTED} ERR_ACTIVE_BORROWER_CAP"
 
@@ -59,6 +61,8 @@ BOND_BPS = 1500  # bond = max(0.1 GEN, 15% of the requested limit)
 MAX_UTILIZATION_BPS = 6000  # protocol-wide ceiling on total_borrowed / total_assets
 LOAN_MATURITY = 365 * 86400  # absolute terminal maturity of drawn debt
 DRAWDOWN_COOLDOWN = 24 * 3600  # assessment -> first drawdown
+PAYMENT_CYCLE_SECONDS = 30 * 86400  # tranche 2 unlocks no earlier than one full cycle after the first drawdown
+MIN_DRAWDOWN_AMOUNT = ATTO // 2  # 0.5 GEN: dust loans cannot squat a registry slot
 FIRST_TRANCHE_BPS = 5000  # until an installment is paid, at most 50% of the limit is outstanding
 MAJOR_LIQUIDATION_BPS = 1000  # a liquidation of >= 10% of pool assets is "major"
 LIQUIDATION_PAUSE = 72 * 3600  # pool-wide drawdown pause after a major liquidation
@@ -490,6 +494,7 @@ class DebtPosition:
     total_drawn: u256
     loan_expiry: u256  # absolute terminal maturity of the current drawn debt (0 == none)
     installments_paid: u256  # on-time installments: the "healthy performance" signal for tranche 2
+    first_draw_at: u256  # timestamp of the facility's first drawdown (0 == never drawn)
 
 
 class SynapseLiquid(gl.contract.Contract):
@@ -644,6 +649,8 @@ class SynapseLiquid(gl.contract.Contract):
             "loan_expiry": expiry,
             "months_left": left,
             "installments_paid": int(d.installments_paid),
+            "first_draw_at": int(d.first_draw_at),
+            "tranche_two_opens_at": int(d.first_draw_at) + PAYMENT_CYCLE_SECONDS if int(d.first_draw_at) > 0 else 0,
             "minimum_payment": str(min_payment),
             "total_repaid": str(int(d.total_repaid)),
             "total_interest_paid": str(int(d.total_interest_paid)),
@@ -797,7 +804,7 @@ class SynapseLiquid(gl.contract.Contract):
             self.borrower_count = int(self.borrower_count) + 1
             self.debts[key] = DebtPosition(
                 principal=0, accrued_interest=0, last_accrual=0, repayment_due=0,
-                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0, installments_paid=0,
+                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0, installments_paid=0, first_draw_at=0,
             )
         self.profiles[key] = CreditProfile(
             borrower=gl.message.sender_address,
@@ -901,9 +908,14 @@ class SynapseLiquid(gl.contract.Contract):
             raise gl.vm.UserError(f"{ERR_EXPECTED} amount exceeds credit limit")
         # Tranche cap: until an installment has been paid on time, no more than
         # 50% of the approved limit may be outstanding.
-        if int(d.installments_paid) == 0 and principal + amount > int(p.credit_limit) * FIRST_TRANCHE_BPS // 10000:
-            raise gl.vm.UserError(ERR_TRANCHE_CAP)
-        if principal == 0 and int(self.active_count) >= MAX_ACTIVE_BORROWERS and key not in self.active_pos:
+        if principal + amount > int(p.credit_limit) * FIRST_TRANCHE_BPS // 10000:
+            if int(d.installments_paid) == 0:
+                raise gl.vm.UserError(ERR_TRANCHE_CAP)
+            # a token installment paid seconds after drawing cannot unlock tranche 2:
+            # one full payment cycle must have elapsed since the first drawdown
+            if now < int(d.first_draw_at) + PAYMENT_CYCLE_SECONDS:
+                raise gl.vm.UserError(ERR_TRANCHE_COOLDOWN)
+        if principal == 0 and int(self.active_count) >= MAX_ACTIVE_BORROWERS:
             raise gl.vm.UserError(ERR_BORROWER_CAP)
         # Hard protocol-wide ceiling, whoever is borrowing: Sybil identities
         # share one budget, so they cannot walk the pool to 100% utilisation.
@@ -911,11 +923,19 @@ class SynapseLiquid(gl.contract.Contract):
             raise gl.vm.UserError(ERR_POOL_CAP_REACHED)
         if amount > int(self.total_assets) - int(self.total_borrowed):
             raise gl.vm.UserError(f"{ERR_EXPECTED} insufficient pool liquidity")
+        # Dust floor. The only sub-floor draw allowed is the one that exactly
+        # exhausts the remaining headroom of an already-open line.
+        if amount < MIN_DRAWDOWN_AMOUNT and not (
+            int(d.principal) > 0 and amount == int(p.credit_limit) - int(d.principal)
+        ):
+            raise gl.vm.UserError(ERR_DRAWDOWN_TOO_SMALL)
         if principal == 0:
             d.loan_expiry = now + LOAN_MATURITY  # fixed once; top-ups never extend it
             d.repayment_due = min(now + REPAYMENT_PERIOD, now + LOAN_MATURITY)
             d.last_accrual = now
         self._set_principal(key, principal + amount)
+        if int(d.total_drawn) == 0:
+            d.first_draw_at = now
         d.total_drawn = int(d.total_drawn) + amount
         p.borrowed_amount = principal + amount
         self.cumulative_originated = int(self.cumulative_originated) + amount
