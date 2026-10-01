@@ -1,0 +1,31 @@
+{
+  "company": "ZeroProof Systems",
+  "period": "2026-09",
+  "monthly_revenue_usd": 80000,
+  "monthly_opex_usd": 30000,
+  "monthly_burn_usd": 95000,
+  "treasury_usd": 330000,
+  "existing_annual_debt_service_usd": 0,
+  "claimed_arr_usd": 960000,
+  "transactions": [
+    {
+      "tx": "0x1c07ded0ce6b1f4dac54263b4c3e412035cab651a20a54168ccf72600b0923e8",
+      "amount_usd": 15000
+    },
+    {
+      "tx": "0x38f5107f46805248393cad3c2ddf21b749600890d894147a43c6ce98c6e06199",
+      "amount_usd": 15000
+    },
+    {
+      "tx": "0xd7f215b91b4e38613e52a696e760cbbd14f53ca836d6480f1862d1f9389d038f",
+      "amount_usd": 15000
+    },
+    {
+      "tx": "0xf27929634b003d7a85eb674a4d8a01cde7484a4b64eda6b005a744cceb14c8ff",
+      "amount_usd": 15000
+    }
+  ],
+  "proof_sha256": "34b14d2e294f32c1834880f96253cfabfa95d61b7ff80ce515b7a6b3a427eba3",
+  "verified_onchain_inflows_usd": 60000,
+  "narrative": "Real-time proof-of-reserves telemetry. Protocol fees paid in stablecoins, diversified across 31 integrators."
+}

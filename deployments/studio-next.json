@@ -1,0 +1,24 @@
+{
+  "network": "studio-next",
+  "chain_id": 61997,
+  "rpc_url": "https://studio-next.genlayer.com/api",
+  "contract_address": "0x83709BEABCeC81C53fB776b37089Cdee976b3069",
+  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069",
+  "source": "contracts/synapse_liquid.py",
+  "runner": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
+  "source_sha256_at_record": "ba5a05a94a573dc825631d3f592b510fc772031bd381a4fb443192467e7a457a",
+  "deployer": "0x54D0352e52434A411c2215441FEAdE4BB6D87C36",
+  "deployed_at": "2026-10-01T13:00:26.188434+00:00",
+  "transactions": [
+    {
+      "label": "deploy",
+      "hash": "0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb"
+    },
+    {
+      "label": "seed_liquidity 5.0 GEN",
+      "hash": "0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74"
+    }
+  ]
+}

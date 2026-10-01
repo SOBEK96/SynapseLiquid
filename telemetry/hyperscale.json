@@ -1,0 +1,27 @@
+{
+  "company": "HyperScale Labs",
+  "period": "2026-09",
+  "monthly_revenue_usd": 60000,
+  "monthly_opex_usd": 180000,
+  "monthly_burn_usd": 260000,
+  "treasury_usd": 400000,
+  "existing_annual_debt_service_usd": 0,
+  "claimed_arr_usd": 720000,
+  "transactions": [
+    {
+      "tx": "0x654f8da152e15bf9b52b2b5a01b0555644a2d264d0ec044f2d0c133ea1a7f091",
+      "amount_usd": 4000
+    },
+    {
+      "tx": "0x307d37c9689a309c124f8a00ac5140a37733bf6ef06bde958b7bfbafc66272d6",
+      "amount_usd": 4000
+    },
+    {
+      "tx": "0x52d3fccc2d15b318eba9d6035dc377d53c07b1a4220d85e5b07934978bcf721c",
+      "amount_usd": 4000
+    }
+  ],
+  "proof_sha256": "a7dd2a4eff7d3573f461808721c1686c2b1f9d0b6a7148e5741c2a7870fe7c78",
+  "verified_onchain_inflows_usd": 12000,
+  "narrative": "Growth-stage compute marketplace. Revenue concentrated in two customers; hiring ahead of demand."
+}

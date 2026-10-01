@@ -1,0 +1,39 @@
+{
+  "company": "Aether Infrastructure",
+  "period": "2026-09",
+  "monthly_revenue_usd": 208334,
+  "monthly_opex_usd": 100000,
+  "monthly_burn_usd": 233334,
+  "treasury_usd": 700000,
+  "existing_annual_debt_service_usd": 0,
+  "claimed_arr_usd": 2500008,
+  "transactions": [
+    {
+      "tx": "0x7821e1b6d70da785f5b9ed2991e41d9080d5c30f60a5382314cb36961e7b36af",
+      "amount_usd": 25000
+    },
+    {
+      "tx": "0xa11d41fcf5dac57bfe6d4429d781d29be3efe239d80f1c6b0210e47b50783b5f",
+      "amount_usd": 25000
+    },
+    {
+      "tx": "0x61575591c739467e28ccd8db4c32806eda650daae329795287945eea5b9cac33",
+      "amount_usd": 25000
+    },
+    {
+      "tx": "0xe75ff365e198a186e7bf24470cc91c7d6370f08afc0860454b7cfe018f6521c8",
+      "amount_usd": 25000
+    },
+    {
+      "tx": "0x7aa065a40fa27ff1d277a69ac222e4ab86a30a9967a96388dd495af8e241d655",
+      "amount_usd": 25000
+    },
+    {
+      "tx": "0x2a26ab40e6024e04e8774a538173764616f7ff699f88220ed74734cde84769f3",
+      "amount_usd": 25000
+    }
+  ],
+  "proof_sha256": "d23e2036b7f1ed2eed08c39cd696717f9b7f7949fcf167cbe9fc497f5201f3d5",
+  "verified_onchain_inflows_usd": 150000,
+  "narrative": "Enterprise SaaS infrastructure. 214 contracted customers, no customer above 6% of revenue, 94% gross retention, annual prepaid contracts."
+}
