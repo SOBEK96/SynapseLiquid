@@ -1,5 +1,6 @@
 {
   "company": "Aether Infrastructure",
+  "borrower_address": "0xF63d4e320397C9C004eCbdF16A9bf28fa22b6277",
   "period": "2026-09",
   "monthly_revenue_usd": 208334,
   "monthly_opex_usd": 100000,

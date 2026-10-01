@@ -21,18 +21,18 @@ def test_negative_revenue_claiming_aaa_is_slashed(c, direct_vm, direct_bob):
     body = telemetry(monthly_revenue_usd=-500_000, claimed_rating="AAA")
     k, out = slashed(c, direct_vm, direct_bob, body)
     assert out["status"] == "REJECTED" and out["reason"] == "IMPOSSIBLE_NEGATIVE_VALUE"
-    assert out["bond_slashed"] == str(BOND)
+    assert out["bond_slashed"] == str(DEFAULT_BOND)
 
 
 def test_slash_moves_bond_to_insurance_reserve(c, direct_vm, direct_bob):
     slashed(c, direct_vm, direct_bob, telemetry(monthly_revenue_usd=-1))
     m = c.get_pool_metrics()
-    assert m["insurance_reserve"] == str(BOND) and m["bonds_held"] == "0" and m["cumulative_slashed"] == str(BOND)
+    assert m["insurance_reserve"] == str(DEFAULT_BOND) and m["bonds_held"] == "0" and m["cumulative_slashed"] == str(DEFAULT_BOND)
 
 
 def test_slash_preserves_cash_invariant(c, direct_vm, direct_bob):
     slashed(c, direct_vm, direct_bob, telemetry(monthly_revenue_usd=-1))
-    assert expected_balance(c) == 5 * ATTO + BOND  # bond stays in the contract
+    assert expected_balance(c) == 5 * ATTO + DEFAULT_BOND  # bond stays in the contract
 
 
 def test_slashed_profile_zeroed(c, direct_vm, direct_bob):
@@ -43,7 +43,7 @@ def test_slashed_profile_zeroed(c, direct_vm, direct_bob):
 
 def test_slashed_address_cannot_reapply(c, direct_vm, direct_bob):
     slashed(c, direct_vm, direct_bob, telemetry(monthly_revenue_usd=-1))
-    send(direct_vm, direct_bob, BOND)
+    send(direct_vm, direct_bob, bond_for(ATTO))
     with direct_vm.expect_revert("banned"):
         c.apply_for_credit("Again", URL, ATTO)
 
@@ -129,7 +129,7 @@ def test_http_failures_are_inconclusive_and_refund(c, direct_vm, direct_bob, sta
     feed(direct_vm, "nope", status=status); review(direct_vm)
     apply(c, direct_vm, direct_bob)
     out = assess(c, direct_vm, key(c, direct_vm, direct_bob))
-    assert out["status"] == "INCONCLUSIVE" and out["bond_refunded"] == str(BOND)
+    assert out["status"] == "INCONCLUSIVE" and out["bond_refunded"] == str(DEFAULT_BOND)
 
 
 def test_inconclusive_releases_bond_accounting(c, direct_vm, direct_bob):

@@ -141,7 +141,7 @@ def test_amortisation_interest_declines(c, line):
 def test_cash_invariant_after_repayments(c, direct_vm, direct_bob, line):
     advance(direct_vm, 45 * DAY)
     out = repay(c, direct_vm, direct_bob, ATTO // 2)
-    cash_in = 5 * ATTO + BOND + int(out["paid"]) - 2 * ATTO
+    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - 2 * ATTO
     assert expected_balance(c) == cash_in
 
 
@@ -150,7 +150,7 @@ def test_close_returns_bond_after_repayment(c, direct_vm, direct_bob, line):
     owed = int(c.get_borrower_schedule(line)["total_owed"])
     repay(c, direct_vm, direct_bob, owed)
     send(direct_vm, direct_bob)
-    assert c.close_credit_line() == str(BOND)
+    assert c.close_credit_line() == str(DEFAULT_BOND)
     assert c.get_credit_profile(line)["status"] == "CLOSED" and c.get_pool_metrics()["bonds_held"] == "0"
 
 
@@ -219,7 +219,7 @@ def test_liquidation_seizes_bond_first(c, direct_vm, direct_charlie, line):
     advance(direct_vm, 38 * DAY)
     send(direct_vm, direct_charlie)
     out = c.liquidate_borrower(line)
-    assert out["recovered_from_bond"] == str(BOND)
+    assert out["recovered_from_bond"] == str(DEFAULT_BOND)
     assert c.get_pool_metrics()["bonds_held"] == "0"
 
 
@@ -230,7 +230,7 @@ def test_liquidation_loss_waterfall_exact(c, direct_vm, direct_charlie, line):
     m = c.get_pool_metrics()
     interest = 2 * ATTO * 400 * 38 * DAY // (10000 * YEAR)
     reserve_cut = interest * 1000 // 10000
-    loss = 2 * ATTO - (BOND - interest)  # bond covers interest first, then principal
+    loss = 2 * ATTO - (DEFAULT_BOND - interest)  # bond covers interest first, then principal
     covered = min(reserve_cut, loss)  # the 10% interest cut seeds the reserve first
     assert int(out["insurance_covered"]) == covered
     assert int(out["lp_loss"]) == loss - covered
@@ -254,7 +254,7 @@ def test_liquidation_preserves_cash_invariant(c, direct_vm, direct_charlie, line
     send(direct_vm, direct_charlie)
     c.liquidate_borrower(line)
     # cash held: deposits + bond - drawdown (nothing was repaid)
-    assert expected_balance(c) == 5 * ATTO + BOND - 2 * ATTO
+    assert expected_balance(c) == 5 * ATTO + DEFAULT_BOND - 2 * ATTO
     m = c.get_pool_metrics()
     assert m["borrowed_liquidity"] == "0" and m["bonds_held"] == "0"
 
@@ -274,7 +274,7 @@ def test_defaulted_borrower_banned(c, direct_vm, direct_bob, direct_charlie, lin
     advance(direct_vm, 38 * DAY)
     send(direct_vm, direct_charlie)
     c.liquidate_borrower(line)
-    send(direct_vm, direct_bob, BOND)
+    send(direct_vm, direct_bob, bond_for(ATTO))
     with direct_vm.expect_revert("banned"):
         c.apply_for_credit("x", URL, ATTO)
 

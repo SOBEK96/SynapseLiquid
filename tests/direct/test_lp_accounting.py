@@ -177,5 +177,5 @@ def test_cash_invariant_through_lifecycle(direct_vm, pool, direct_alice, direct_
     out = repay(pool, direct_vm, direct_bob, ATTO // 3)
     m = pool.get_pool_metrics()
     # cash in = LP deposits + bond + repayments - drawdown
-    cash_in = 5 * ATTO + BOND + int(out["paid"]) - 2 * ATTO
+    cash_in = 5 * ATTO + DEFAULT_BOND + int(out["paid"]) - 2 * ATTO
     assert expected_balance(pool) == cash_in

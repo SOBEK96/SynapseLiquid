@@ -1,5 +1,6 @@
 {
   "company": "ZeroProof Systems",
+  "borrower_address": "0x7B6c9B679f66c1438516760127def69D6fD2e373",
   "period": "2026-09",
   "monthly_revenue_usd": 80000,
   "monthly_opex_usd": 30000,

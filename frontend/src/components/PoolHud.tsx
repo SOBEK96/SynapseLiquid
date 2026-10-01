@@ -9,7 +9,7 @@ export function PoolHud({ pool }: { pool: Pool | null }) {
     <Panel title="Pool Health" icon={<Activity size={13} className="text-emerald-400" />}
       right={<span className="label">live · gen_call</span>}>
       <div className="grid grid-cols-2 divide-x divide-slate-800/80 lg:grid-cols-4">
-        <Stat label="Total Pool Liquidity" value={pool ? `${fromAtto(pool.total_deposited, 3)}` : "—"} sub="GEN · LP net asset value" />
+        <Stat label="Total Pool Liquidity" value={pool ? `${fromAtto(pool.lp_nav ?? pool.total_deposited, 3)}` : "—"} sub={pool && pool.delinquent_principal && pool.delinquent_principal !== "0" ? "GEN · marked down for delinquent loans" : "GEN · LP net asset value"} />
         <Stat label="Active Debt Deployed" value={pool ? `${fromAtto(pool.borrowed_liquidity, 3)}` : "—"} sub={pool ? `${util.toFixed(1)}% utilisation` : "GEN"} accent="#38bdf8" />
         <Stat label="Blended LP APY" value={pool ? pct(pool.lp_apy_bps) : "—"} sub="net of 10% reserve cut" accent="#34d399" />
         <Stat label="Protocol Default Rate" value={pool ? pct(pool.default_rate_bps, 1) : "—"} sub={pool ? `${fromAtto(pool.cumulative_originated, 2)} GEN originated` : ""} accent={pool && pool.default_rate_bps > 0 ? "#f87171" : "#e2e8f0"} />
@@ -19,7 +19,7 @@ export function PoolHud({ pool }: { pool: Pool | null }) {
           <span className="label whitespace-nowrap">Utilisation</span>
           <div className="relative h-2 flex-1 overflow-hidden rounded-full bg-slate-800">
             <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-emerald-400 transition-all duration-700" style={{ width: `${Math.min(100, util)}%` }} />
-            <i className="absolute top-0 h-full w-px bg-amber-400/80" style={{ left: "80%" }} title="80% kink" />
+            <i className="absolute top-0 h-full w-px bg-amber-400/80" style={{ left: "60%" }} title="60% protocol utilisation cap" />
           </div>
           <span className="num text-xs text-slate-400">{util.toFixed(1)}%</span>
         </div>

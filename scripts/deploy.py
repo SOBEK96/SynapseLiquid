@@ -41,7 +41,12 @@ def main() -> None:
         print(f"contract already deployed at {rec['contract_address']} (source unchanged)")
     else:
         addr, receipt = deployer.deploy(code, "deploy synapse_liquid")
+        previous = list(rec.get("previous_deployments", []))
+        if rec.get("contract_address"):  # keep the superseded contract on record
+            previous.append({k: rec.get(k) for k in ("contract_address", "explorer_url", "source_sha256_at_record",
+                                                     "deployed_at", "transactions")})
         rec = {
+            "previous_deployments": previous,
             "network": "studio-next",
             "chain_id": CHAIN_ID,
             "rpc_url": RPC_URL,

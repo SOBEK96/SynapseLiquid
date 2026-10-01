@@ -1,24 +1,74 @@
 {
+  "previous_deployments": [
+    {
+      "contract_address": "0x83709BEABCeC81C53fB776b37089Cdee976b3069",
+      "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069",
+      "source_sha256_at_record": "ba5a05a94a573dc825631d3f592b510fc772031bd381a4fb443192467e7a457a",
+      "deployed_at": "2026-10-01T13:00:26.188434+00:00",
+      "transactions": [
+        {
+          "label": "deploy",
+          "hash": "0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb"
+        },
+        {
+          "label": "seed_liquidity 5.0 GEN",
+          "hash": "0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74"
+        },
+        {
+          "label": "apply_for_credit Aether Infrastructure",
+          "hash": "0x655e19ceac689be2698d5cb4cf1ab2b5705225449217f9b64987863876a00cc1",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x655e19ceac689be2698d5cb4cf1ab2b5705225449217f9b64987863876a00cc1"
+        },
+        {
+          "label": "assess_credit_consensus Aether Infrastructure",
+          "hash": "0xbbc4f219ac2dcf18381e325e31d384388c0011a3701f11ce6589fc3d10658ce4",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0xbbc4f219ac2dcf18381e325e31d384388c0011a3701f11ce6589fc3d10658ce4"
+        },
+        {
+          "label": "drawdown_credit 1.5 GEN Aether Infrastructure",
+          "hash": "0x3e7cdbecb49af528e5f252ec41d3bc32f372eaa0145b408ef5fbd70e24e01acd",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x3e7cdbecb49af528e5f252ec41d3bc32f372eaa0145b408ef5fbd70e24e01acd"
+        },
+        {
+          "label": "apply_for_credit HyperScale Labs",
+          "hash": "0x5bbdd551ecf7fb3a4c22e353c48ca207a7c808e300826299129ddac9b9153c46",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x5bbdd551ecf7fb3a4c22e353c48ca207a7c808e300826299129ddac9b9153c46"
+        },
+        {
+          "label": "assess_credit_consensus HyperScale Labs",
+          "hash": "0xf93a1b92ba36ca0b32528c7ec284d2858ab85d5e92ce42be5fea73cc711c70c9",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0xf93a1b92ba36ca0b32528c7ec284d2858ab85d5e92ce42be5fea73cc711c70c9"
+        },
+        {
+          "label": "apply_for_credit ZeroProof Systems",
+          "hash": "0x55213e8e2b42d2ed8890467c65ac7dfeec5307feb181065c75b27e487e63776d",
+          "url": "https://explorer-studio-next.genlayer.com/transactions/0x55213e8e2b42d2ed8890467c65ac7dfeec5307feb181065c75b27e487e63776d"
+        }
+      ]
+    }
+  ],
   "network": "studio-next",
   "chain_id": 61997,
   "rpc_url": "https://studio-next.genlayer.com/api",
-  "contract_address": "0x83709BEABCeC81C53fB776b37089Cdee976b3069",
-  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069",
+  "contract_address": "0xb4c01554C5C30ae3Cc706118460c7887E918650a",
+  "explorer_url": "https://explorer-studio-next.genlayer.com/address/0xb4c01554C5C30ae3Cc706118460c7887E918650a",
   "source": "contracts/synapse_liquid.py",
   "runner": "py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng",
-  "source_sha256_at_record": "ba5a05a94a573dc825631d3f592b510fc772031bd381a4fb443192467e7a457a",
+  "source_sha256_at_record": "77afa5b24c2e78e4c8b453cd61f3a2816f650e6ee39e9b1f2b239b35107ec8ce",
   "deployer": "0x54D0352e52434A411c2215441FEAdE4BB6D87C36",
-  "deployed_at": "2026-10-01T13:00:26.188434+00:00",
+  "deployed_at": "2026-10-01T14:03:21.366513+00:00",
   "transactions": [
     {
       "label": "deploy",
-      "hash": "0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb",
-      "url": "https://explorer-studio-next.genlayer.com/transactions/0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb"
+      "hash": "0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf"
     },
     {
       "label": "seed_liquidity 5.0 GEN",
-      "hash": "0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74",
-      "url": "https://explorer-studio-next.genlayer.com/transactions/0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74"
+      "hash": "0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1"
     }
   ]
 }

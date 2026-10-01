@@ -44,10 +44,16 @@ ERR_EXPECTED = "[EXPECTED]"
 ERR_EXTERNAL = "[EXTERNAL]"
 ERR_TRANSIENT = "[TRANSIENT]"
 ERR_LLM = "[LLM_ERROR]"
+ERR_BORROWER_MISMATCH = f"{ERR_EXPECTED} ERR_BORROWER_MISMATCH"
+ERR_POOL_CAP_REACHED = f"{ERR_EXPECTED} ERR_POOL_CAP_REACHED"
+ERR_POOL_DELINQUENT = f"{ERR_EXPECTED} ERR_POOL_DELINQUENT"
 
 # --- Protocol constants ------------------------------------------------------
 ATTO = 10**18
-UNDERWRITING_BOND = ATTO // 10  # 0.1 GEN
+UNDERWRITING_BOND = ATTO // 10  # 0.1 GEN: the floor of the proportional bond
+BOND_BPS = 1500  # bond = max(0.1 GEN, 15% of the requested limit)
+MAX_UTILIZATION_BPS = 6000  # protocol-wide ceiling on total_borrowed / total_assets
+LOAN_MATURITY = 365 * 86400  # absolute terminal maturity of drawn debt
 MIN_DEPOSIT = 10**15  # 0.001 GEN
 SECONDS_PER_YEAR = 365 * 86400
 REPAYMENT_PERIOD = 30 * 86400
@@ -178,6 +184,18 @@ def _underwrite(revenue, opex, burn, treasury, inflows, existing_ds, requested_u
 
 def _limit_usd(rating: str, arr: int, requested_usd: int) -> int:
     return min(requested_usd, arr * ADVANCE_BPS.get(rating, 0) // 10000)
+
+
+def _required_bond(requested_limit: int) -> int:
+    """Skin in the game: never less than 0.1 GEN, never less than 15% of the line."""
+    return max(UNDERWRITING_BOND, requested_limit * BOND_BPS // 10000)
+
+
+def _months_left(now: int, expiry: int) -> int:
+    """Whole 30-day periods remaining to the terminal maturity (1..TERM_MONTHS)."""
+    if expiry <= now:
+        return 1
+    return max(1, min(TERM_MONTHS, -(-(expiry - now) // REPAYMENT_PERIOD)))
 
 
 def _surcharge_bps(utilisation_bps: int) -> int:
@@ -356,13 +374,19 @@ def _build_prompt(company: str, pf: dict, uw: dict) -> str:
     )
 
 
-def _screen(res, requested_usd: int):
+def _screen(res, requested_usd: int, borrower_key: str):
     """Everything deterministic that precedes the model call. Returns
     (early_result, pf, uw): early_result is a finished result dict for
     INCONCLUSIVE / FRAUD, otherwise None and pf/uw feed the review."""
     state, data = _interpret_response(res)
     if state != "OK":
         return ({"outcome": OUT_INCONCLUSIVE, "reason": state}, None, None)
+    # Identity binding (anti-replay): the telemetry must name the very address
+    # being rated. A file published for one borrower cannot rate another.
+    if isinstance(data, dict):
+        bound = data.get("borrower_address")
+        if not isinstance(bound, str) or bound.strip().lower() != borrower_key.lower():
+            raise gl.vm.UserError(ERR_BORROWER_MISMATCH)
     pf = _preflight(data)
     if pf["verdict"] == "UNUSABLE":
         return ({"outcome": OUT_INCONCLUSIVE, "reason": pf["reason"]}, None, None)
@@ -455,6 +479,7 @@ class DebtPosition:
     total_repaid: u256
     total_interest_paid: u256
     total_drawn: u256
+    loan_expiry: u256  # absolute terminal maturity of the current drawn debt (0 == none)
 
 
 class SynapseLiquid(gl.contract.Contract):
@@ -515,6 +540,9 @@ class SynapseLiquid(gl.contract.Contract):
             "utilization_bps": util,
             "lp_apy_bps": lp_apy,
             "cumulative_yield_index": str(int(self.cumulative_yield_index)),
+            "lp_nav": str(self._nav()),
+            "delinquent_principal": str(self._delinquent_principal()),
+            "max_utilization_bps": MAX_UTILIZATION_BPS,
             "total_shares": str(int(self.total_shares)),
             "insurance_reserve": str(int(self.insurance_reserve)),
             "bonds_held": str(int(self.bonds_held)),
@@ -569,11 +597,14 @@ class SynapseLiquid(gl.contract.Contract):
         accrued = int(d.accrued_interest)
         if principal > 0 and p.status in (STATUS_ACTIVE, STATUS_FROZEN):
             accrued += _interest(principal, rate, max(0, self._now() - int(d.last_accrual)))
-        min_payment = min(principal + accrued, accrued + -(-principal // TERM_MONTHS)) if principal > 0 else 0
+        now = self._now()
+        expiry = int(d.loan_expiry)
+        left = _months_left(now, expiry) if principal > 0 else TERM_MONTHS
+        step = -(-principal // left) if principal > 0 else 0
+        min_payment = min(principal + accrued, accrued + step) if principal > 0 else 0
         schedule = []
         bal = principal
-        step = -(-principal // TERM_MONTHS) if principal > 0 else 0
-        for m in range(1, TERM_MONTHS + 1):
+        for m in range(1, left + 1):
             if bal <= 0:
                 break
             interest = _interest(bal, rate, REPAYMENT_PERIOD)
@@ -585,6 +616,8 @@ class SynapseLiquid(gl.contract.Contract):
             "accrued_interest": str(accrued),
             "total_owed": str(principal + accrued),
             "repayment_due": int(d.repayment_due),
+            "loan_expiry": expiry,
+            "months_left": left,
             "minimum_payment": str(min_payment),
             "total_repaid": str(int(d.total_repaid)),
             "total_interest_paid": str(int(d.total_interest_paid)),
@@ -612,6 +645,12 @@ class SynapseLiquid(gl.contract.Contract):
             "loss": str(basis - value) if basis > value else "0",
             "withdrawable": str(min(value, int(self.total_assets) - int(self.total_borrowed))),
         }
+
+    @gl.public.view
+    def get_total_assets(self) -> str:
+        """LP net asset value marked to market: every loan past its due date is
+        written down by 100% until it is cured or liquidated."""
+        return str(self._nav())
 
     @gl.public.view
     def get_borrower_count(self) -> int:
@@ -652,6 +691,8 @@ class SynapseLiquid(gl.contract.Contract):
         amount = int(gl.message.value)
         if amount < MIN_DEPOSIT:
             raise gl.vm.UserError(f"{ERR_EXPECTED} deposit below minimum")
+        if self._delinquent_principal() > 0:
+            raise gl.vm.UserError(ERR_POOL_DELINQUENT)  # no buying a marked-down book
         assets, shares_total = int(self.total_assets), int(self.total_shares)
         if shares_total == 0:
             minted = amount
@@ -677,7 +718,10 @@ class SynapseLiquid(gl.contract.Contract):
         if shares == 0:
             raise gl.vm.UserError(f"{ERR_EXPECTED} no LP position")
         assets, shares_total = int(self.total_assets), int(self.total_shares)
-        value = shares * assets // shares_total
+        nav = self._nav()  # delinquent loans are written down pro rata across ALL holders
+        if nav == 0:
+            raise gl.vm.UserError(f"{ERR_EXPECTED} pool impaired, nothing withdrawable")
+        value = shares * nav // shares_total
         liquidity = assets - int(self.total_borrowed)
         ceiling = min(value, liquidity)
         if amount < 0:
@@ -689,7 +733,7 @@ class SynapseLiquid(gl.contract.Contract):
             raise gl.vm.UserError(f"{ERR_EXPECTED} amount exceeds position value")
         if want > liquidity:
             raise gl.vm.UserError(f"{ERR_EXPECTED} insufficient pool liquidity")
-        burn = -(-want * shares_total // assets)  # round up in the pool's favour
+        burn = -(-want * shares_total // nav)  # round up in the pool's favour
         burn = min(burn, shares)
         basis = int(self.lp_basis[key])
         basis_cut = basis * burn // shares
@@ -703,8 +747,11 @@ class SynapseLiquid(gl.contract.Contract):
     # ----------------------------------------------------------------- credit
     @gl.public.write.payable
     def apply_for_credit(self, company_name: str, telemetry_uri: str, requested_limit: int) -> str:
-        if int(gl.message.value) != UNDERWRITING_BOND:
-            raise gl.vm.UserError(f"{ERR_EXPECTED} exact 0.1 GEN underwriting bond required")
+        if requested_limit <= 0:
+            raise gl.vm.UserError(f"{ERR_EXPECTED} requested limit must be positive")
+        bond = _required_bond(int(requested_limit))
+        if int(gl.message.value) != bond:
+            raise gl.vm.UserError(f"{ERR_EXPECTED} exact underwriting bond required: max(0.1 GEN, 15% of limit)")
         name = _sanitize(company_name.strip(), MAX_NAME_LEN)
         if name == "" or name != company_name.strip():
             raise gl.vm.UserError(f"{ERR_EXPECTED} invalid company name")
@@ -724,13 +771,13 @@ class SynapseLiquid(gl.contract.Contract):
             self.borrower_count = int(self.borrower_count) + 1
             self.debts[key] = DebtPosition(
                 principal=0, accrued_interest=0, last_accrual=0, repayment_due=0,
-                total_repaid=0, total_interest_paid=0, total_drawn=0,
+                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0,
             )
         self.profiles[key] = CreditProfile(
             borrower=gl.message.sender_address,
             company_name=name,
             metadata_uri=telemetry_uri,
-            underwriting_bond=UNDERWRITING_BOND,
+            underwriting_bond=bond,
             rating="UNRATED",
             credit_limit=0,
             borrowed_amount=0,
@@ -746,7 +793,7 @@ class SynapseLiquid(gl.contract.Contract):
             assessment_reason="AWAITING_ASSESSMENT",
             applied_at=self._now(),
         )
-        self.bonds_held = int(self.bonds_held) + UNDERWRITING_BOND
+        self.bonds_held = int(self.bonds_held) + bond
         return key
 
     @gl.public.write
@@ -771,7 +818,7 @@ class SynapseLiquid(gl.contract.Contract):
                 res = gl.nondet.web.get(uri)
             except Exception:
                 res = None
-            early, pf, uw = _screen(res, requested_usd)
+            early, pf, uw = _screen(res, requested_usd, key)
             if early is not None or pf is None or uw is None:
                 return early
             try:
@@ -818,12 +865,19 @@ class SynapseLiquid(gl.contract.Contract):
         principal = int(d.principal)
         if principal > 0 and int(d.repayment_due) > 0 and now > int(d.repayment_due):
             raise gl.vm.UserError(f"{ERR_EXPECTED} repayment overdue")
+        if principal > 0 and now >= int(d.loan_expiry):
+            raise gl.vm.UserError(f"{ERR_EXPECTED} loan matured")
         if amount > int(p.credit_limit) - principal:
             raise gl.vm.UserError(f"{ERR_EXPECTED} amount exceeds credit limit")
+        # Hard protocol-wide ceiling, whoever is borrowing: Sybil identities
+        # share one budget, so they cannot walk the pool to 100% utilisation.
+        if int(self.total_borrowed) + amount > int(self.total_assets) * MAX_UTILIZATION_BPS // 10000:
+            raise gl.vm.UserError(ERR_POOL_CAP_REACHED)
         if amount > int(self.total_assets) - int(self.total_borrowed):
             raise gl.vm.UserError(f"{ERR_EXPECTED} insufficient pool liquidity")
         if principal == 0:
-            d.repayment_due = now + REPAYMENT_PERIOD
+            d.loan_expiry = now + LOAN_MATURITY  # fixed once; top-ups never extend it
+            d.repayment_due = min(now + REPAYMENT_PERIOD, now + LOAN_MATURITY)
             d.last_accrual = now
         self._set_principal(key, principal + amount)
         d.total_drawn = int(d.total_drawn) + amount
@@ -852,7 +906,8 @@ class SynapseLiquid(gl.contract.Contract):
         if owed == 0:
             raise gl.vm.UserError(f"{ERR_EXPECTED} no debt outstanding")
         pay = min(value, owed)
-        min_installment = min(owed, accrued + -(-principal // TERM_MONTHS))
+        left = _months_left(now, int(d.loan_expiry))
+        min_installment = min(owed, accrued + -(-principal // left))
         interest_part = min(pay, accrued)
         principal_part = pay - interest_part
         self._distribute_interest(interest_part)
@@ -863,8 +918,10 @@ class SynapseLiquid(gl.contract.Contract):
         p.borrowed_amount = principal - principal_part
         if pay == owed:
             d.repayment_due = 0
+            d.loan_expiry = 0
         elif pay >= min_installment:
-            d.repayment_due = now + REPAYMENT_PERIOD
+            # the due date rolls forward but never past the terminal maturity
+            d.repayment_due = min(now + REPAYMENT_PERIOD, int(d.loan_expiry))
         refund = value - pay
         if refund > 0:
             self._pay(gl.message.sender_address, refund)
@@ -875,6 +932,21 @@ class SynapseLiquid(gl.contract.Contract):
             "remaining": str(owed - pay),
             "refunded": str(refund),
         }
+
+    @gl.public.write
+    def cancel_application(self) -> str:
+        """Withdraw a PENDING application and recover the bond (e.g. after an
+        ERR_BORROWER_MISMATCH, so a mis-published feed never strands a bond)."""
+        key = gl.message.sender_address.as_hex
+        if key not in self.profiles or self.profiles[key].status != STATUS_PENDING:
+            raise gl.vm.UserError(f"{ERR_EXPECTED} no pending application")
+        p = self.profiles[key]
+        bond = int(p.underwriting_bond)
+        p.status = STATUS_CLOSED
+        p.underwriting_bond = 0
+        self.bonds_held = int(self.bonds_held) - bond
+        self._pay(gl.message.sender_address, bond)
+        return str(bond)
 
     @gl.public.write
     def close_credit_line(self) -> str:
@@ -934,6 +1006,7 @@ class SynapseLiquid(gl.contract.Contract):
 
         d.accrued_interest = 0
         d.repayment_due = 0
+        d.loan_expiry = 0
         d.total_repaid = int(d.total_repaid) + recovered
         d.total_interest_paid = int(d.total_interest_paid) + interest_rec
         p.status = STATUS_DEFAULTED
@@ -1085,9 +1158,26 @@ class SynapseLiquid(gl.contract.Contract):
             self.cumulative_yield_index = int(self.cumulative_yield_index) + lp * YIELD_SCALE // shares
         self.total_interest_paid = int(self.total_interest_paid) + interest
 
+    def _delinquent_principal(self) -> int:
+        """Principal of every loan past its due date (O(borrowers))."""
+        now = self._now()
+        total = 0
+        for i in range(int(self.borrower_count)):
+            key = self.borrower_index[i]
+            d = self.debts[key]
+            principal = int(d.principal)
+            if principal > 0 and int(d.repayment_due) > 0 and now > int(d.repayment_due):
+                if self.profiles[key].status in (STATUS_ACTIVE, STATUS_FROZEN):
+                    total += principal
+        return total
+
+    def _nav(self) -> int:
+        """LP net asset value: nominal assets less delinquent principal."""
+        return max(0, int(self.total_assets) - self._delinquent_principal())
+
     def _shares_value(self, shares: int) -> int:
         total = int(self.total_shares)
-        return shares * int(self.total_assets) // total if total > 0 else 0
+        return shares * self._nav() // total if total > 0 else 0
 
     def _is_solvent(self) -> bool:
         expected = (
@@ -1117,15 +1207,26 @@ class SynapseLiquid(gl.contract.Contract):
         return int(datetime.now(timezone.utc).timestamp())
 
     def _safe_url(self, url: str) -> bool:
+        """Public https DNS names only. Every IP literal is refused outright
+        (so 10/8, 172.16/12, 192.168/16, 127/8, 169.254/16 incl. the cloud
+        metadata endpoint, and decimal / hex / octal spellings all fail)."""
         if not isinstance(url, str) or len(url) > MAX_URI_LEN or not url.startswith("https://"):
             return False
         try:
-            host = (urlsplit(url).hostname or "").lower()
+            parts = urlsplit(url)
+            host = (parts.hostname or "").lower().rstrip(".")
+            if parts.username is not None or parts.password is not None:
+                return False
         except Exception:
             return False
-        if host == "" or "." not in host or host in ("localhost",) or host.endswith((".local", ".internal")):
+        if host == "" or "." not in host or ":" in host or "[" in host:
             return False
-        parts = host.split(".")
-        if all(x.isdigit() for x in parts):  # raw IPv4 literal
+        if host in ("localhost", "metadata.google.internal", "instance-data", "metadata"):
             return False
+        if host.endswith((".local", ".localhost", ".internal", ".intranet", ".lan", ".home", ".corp",
+                          ".nip.io", ".sslip.io", ".xip.io", ".localtest.me")):
+            return False
+        labels = host.split(".")
+        if all(x.isdigit() or x.startswith("0x") for x in labels) or labels[-1].isdigit():
+            return False  # IPv4 literal in any spelling
         return True

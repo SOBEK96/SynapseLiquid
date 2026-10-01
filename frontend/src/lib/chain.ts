@@ -24,6 +24,8 @@ export const explorerTx = (h: string) => `${EXPLORER}/transactions/${h}`;
 
 export interface Pool {
   total_deposited: string;
+  lp_nav?: string;
+  delinquent_principal?: string;
   available_liquidity: string;
   borrowed_liquidity: string;
   utilization_bps: number;

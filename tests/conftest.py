@@ -6,7 +6,17 @@ from datetime import datetime, timedelta, timezone
 
 CONTRACT = "contracts/synapse_liquid.py"
 ATTO = 10**18
-BOND = ATTO // 10
+BOND = ATTO // 10  # the 0.1 GEN floor
+MAX_UTIL_BPS = 6000
+
+
+def bond_for(limit):
+    """Proportional underwriting bond: max(0.1 GEN, 15% of the requested limit)."""
+    return max(BOND, limit * 15 // 100)
+
+
+DEFAULT_LIMIT = 3 * ATTO
+DEFAULT_BOND = bond_for(DEFAULT_LIMIT)  # 0.45 GEN
 URL = "https://telemetry.example.com/borrower.json"
 DAY = 86400
 YEAR = 365 * DAY
@@ -61,16 +71,21 @@ def hyperscale(**over):
 def feed(vm, body, status=200):
     raw = body if isinstance(body, str) else json.dumps(body)
     vm.clear_mocks()
+    vm._feed = (body, status)
     vm.mock_web(r".*", {"status": status, "body": raw})
-    if getattr(vm, "_last_review", None):  # clear_mocks also drops the LLM mock
-        review(vm, *vm._last_review)
+    if getattr(vm, "_llm", None):  # clear_mocks also drops the LLM mock
+        vm.mock_llm(*vm._llm)
+
+
+def llm(vm, response, pattern=r"(?s).*"):
+    """Install an LLM mock that survives feed()/assess() re-mocking the web."""
+    vm._llm = (pattern, response)
+    vm.mock_llm(pattern, response)
 
 
 def review(vm, flag="CLEAN", notches=0, rationale="Committee review."):
     # Double-encoded: the harness json.loads()s the mock once, the SDK again.
-    vm._last_review = (flag, notches, rationale)
-    vm.mock_llm(r"(?s).*", json.dumps(json.dumps(
-        {"risk_flag": flag, "notches_down": notches, "rationale": rationale})))
+    llm(vm, json.dumps(json.dumps({"risk_flag": flag, "notches_down": notches, "rationale": rationale})))
 
 
 def send(vm, who, value=0):
@@ -85,8 +100,8 @@ def deposit(c, vm, who, amount):
     return out
 
 
-def apply(c, vm, who, name="Aether Infrastructure", limit=3 * ATTO, uri=URL, value=BOND):
-    send(vm, who, value)
+def apply(c, vm, who, name="Aether Infrastructure", limit=3 * ATTO, uri=URL, value=None):
+    send(vm, who, bond_for(limit) if value is None else value)
     out = c.apply_for_credit(name, uri, limit)
     vm.value = 0
     return out
@@ -98,6 +113,11 @@ def key(c, vm, who):
 
 
 def assess(c, vm, borrower_key, caller=None):
+    # Telemetry must name the borrower it rates. Bind the mocked document to the
+    # borrower under test unless the test set borrower_address itself.
+    fb = getattr(vm, "_feed", None)
+    if fb and isinstance(fb[0], dict) and "borrower_address" not in fb[0]:
+        feed(vm, {**fb[0], "borrower_address": borrower_key}, fb[1])
     if caller is not None:
         vm.sender = caller
     vm.value = 0

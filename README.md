@@ -4,7 +4,7 @@
 [GenLayer](https://genlayer.com) Studio Next (chain `61997`).
 
 Web3 startups with verifiable cash flows (SaaS subscriptions, protocol fees, treasury inflows) apply for
-credit lines against a **0.1 GEN underwriting bond**. GenVM validators fetch the applicant's JSON
+credit lines against a **proportional underwriting bond** (`max(0.1 GEN, 15% of the requested limit)`). GenVM validators fetch the applicant's JSON
 telemetry, verify its cryptographic cash-flow proof, compute **Runway / DSCR / ARR** in integer arithmetic, and
 reach multi-LLM consensus under the **Equivalence Principle** on a rating from `AAA` to `C`. The contract binds
 the interest rate, credit limit and amortisation schedule directly to that rating.
@@ -18,15 +18,16 @@ the interest rate, credit limit and amortisation schedule directly to that ratin
 
 <!-- PROOFS:START -->
 - **Network:** GenLayer Studio Next · chain `61997` (`0xF22D`) · RPC `https://studio-next.genlayer.com/api`
-- **Contract:** [`0x83709BEABCeC81C53fB776b37089Cdee976b3069`](https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069)
-- **Source SHA-256 (`contracts/synapse_liquid.py`):** `ba5a05a94a573dc825631d3f592b510fc772031bd381a4fb443192467e7a457a`
+- **Contract:** [`0xb4c01554C5C30ae3Cc706118460c7887E918650a`](https://explorer-studio-next.genlayer.com/address/0xb4c01554C5C30ae3Cc706118460c7887E918650a)
+- **Source SHA-256 (`contracts/synapse_liquid.py`):** `77afa5b24c2e78e4c8b453cd61f3a2816f650e6ee39e9b1f2b239b35107ec8ce`
 - **Runner:** `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng`
-- **Deployed:** 2026-10-01T13:00:26.188434+00:00
+- **Deployed:** 2026-10-01T14:03:21.366513+00:00
+- **Superseded (pre-audit) contract:** [`0x83709BEABCeC81C53fB776b37089Cdee976b3069`](https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069) — do not use
 
 | # | Action | Transaction |
 |---|--------|-------------|
-| 1 | deploy | [`0x0e73034a…86f67dfb`](https://explorer-studio-next.genlayer.com/transactions/0x0e73034ad627d102b8c63c4f41b60c4af3c4f48c33512d5b1f74e26386f67dfb) |
-| 2 | seed_liquidity 5.0 GEN | [`0x1637091b…b50fcb74`](https://explorer-studio-next.genlayer.com/transactions/0x1637091b582cdc69758681a6116986657ef38ed8741cb07d25070941b50fcb74) |
+| 1 | deploy | [`0x6adbc15d…9ed8cacf`](https://explorer-studio-next.genlayer.com/transactions/0x6adbc15de70c5c42f1f8a7282cb703bd22c4be9d560302deda3683889ed8cacf) |
+| 2 | seed_liquidity 5.0 GEN | [`0xa4c311bc…2529bfb1`](https://explorer-studio-next.genlayer.com/transactions/0xa4c311bc2689d36200d6f55807c16cdff65350ce1a92d978d3d4a71c2529bfb1) |
 <!-- PROOFS:END -->
 
 Every row is a Studio Next transaction decided by validator consensus. The contract's own accounting is checked
@@ -73,6 +74,12 @@ Mathematics sets a **ceiling**; the LLM committee may only move the rating **dow
 * **Investment-grade floor.** Failing BBB's runway/DSCR bounds the rating strictly to BB/B/C.
 * **Corroboration cap.** Revenue that on-chain inflows corroborate below 10% cannot be investment grade (≤ BB).
 * **Credit limit** = `min(requested, ARR × advance_rate, 60% of pool assets)`.
+* **Underwriting bond** = `max(0.1 GEN, 15% of requested limit)`, exact. A defaulter forfeits at least 15% of the line.
+* **Global utilisation cap.** `total_borrowed + drawdown ≤ 60% × total_assets` for *every* borrower together
+  (`ERR_POOL_CAP_REACHED`), so Sybil identities share one budget.
+* **Absolute maturity.** The first drawdown fixes `loan_expiry = now + 365 d`; top-ups never extend it. The due date
+  rolls at most to the maturity and the minimum instalment is `accrued + principal ÷ months_left`, so the debt
+  amortises to zero by the terminal date. Past maturity the loan is delinquent.
 * **Dynamic rate** = tier APR + a utilisation surcharge: 0 up to 80% pool utilisation, rising linearly to +500 bps
   at 100%. The rate is locked at assessment.
 * **LLM notches.** The committee returns `CLEAN` or `SUSPICIOUS` and 0–2 notches *down* (`CLEAN` ≤ 1). The contract
@@ -103,7 +110,7 @@ contract balance == total_assets − total_borrowed + insurance_reserve + bonds_
 
 ```
  Borrower                         SynapseLiquid contract (GenVM)                       Validators (leader + N)
-    │  apply_for_credit(0.1 GEN)            │                                                  │
+    │  apply_for_credit(bond)                │                                                  │
     ├──────────────────────────────────────►│ profile=PENDING, bond held as collateral         │
     │                                       │                                                  │
  Steward (anyone)                           │                                                  │
@@ -138,7 +145,8 @@ contract balance == total_assets − total_borrowed + insurance_reserve + bonds_
 | Method | Kind | Purpose |
 |--------|------|---------|
 | `deposit_liquidity()` | payable | LP deposit, mints shares |
-| `apply_for_credit(company_name, telemetry_uri, requested_limit)` | payable | exact 0.1 GEN bond, https-only telemetry URI |
+| `apply_for_credit(company_name, telemetry_uri, requested_limit)` | payable | exact `max(0.1 GEN, 15% of limit)` bond, public-https-only telemetry URI |
+| `cancel_application()` | write | recover the bond of a `PENDING` application |
 | `assess_credit_consensus(borrower)` | write | the consensus round above |
 | `drawdown_credit(amount)` | write | borrow up to the rated limit and pool liquidity |
 | `service_debt()` | payable | repay interest then principal; excess refunded |
@@ -155,6 +163,7 @@ refunded, may re-apply), `REJECTED` (bond slashed, address banned) and `CLOSED`.
 
 | Condition | Outcome |
 |-----------|---------|
+| `telemetry.borrower_address` ≠ the borrower being rated (or missing) | **revert `ERR_BORROWER_MISMATCH`**, no rating, no state change; applicant may `cancel_application()` |
 | Any negative revenue / opex / burn / treasury (e.g. negative revenue while claiming AAA) | **FRAUD → bond slashed to insurance reserve, address banned** |
 | `monthly_burn < monthly_opex` (outflows below operating costs) | FRAUD |
 | Duplicate tx ids, non-positive amounts, malformed log | FRAUD |
@@ -173,7 +182,7 @@ array. `scripts/make_telemetry.py` builds valid documents.
 
 ```bash
 uv venv --python 3.12 && uv pip install --prerelease=allow -r requirements.txt
-.venv/bin/pytest tests/direct -q          # 200+ in-memory GenVM tests (~4 min)
+.venv/bin/pytest tests/direct -q          # 289 in-memory GenVM tests (run files in parallel; ~100 s each)
 .venv/bin/genvm-lint check contracts/synapse_liquid.py
 cd frontend && npm install && npm run build   # tsc + vite, 0 errors
 npm run console-check                          # headless Chrome: zero console errors on the live contract
@@ -211,8 +220,9 @@ TELEMETRY_BASE_URL=https://<host>/telemetry ../.venv/bin/python interact_live.py
 | 2 | HyperScale Labs | revenue $60k vs opex $180k, ≈ 2 mo runway | `C`, 35% APR, 0.115 GEN ceiling |
 | 3 | ZeroProof Systems | ARR $960k, ≈ 22 mo runway | `PENDING` → live consensus (math ceiling `AA`) |
 
-> **Status:** the contract is deployed and funded (section 1). The three positions above are **not yet seeded on
-> chain**: seeding needs the telemetry feeds hosted at a public https URL, which has not been arranged. The
+> **Status:** the audited contract is deployed and funded (section 1). The three positions above are **not yet seeded on
+> chain**: seeding needs the (address-bound) telemetry feeds hosted at a public https URL, which has not been arranged;
+> an attempt to publish them as a gist was blocked and not retried. The
 > “Resolved as” column is what the shipped fixtures produce in the test suite (`test_telemetry_fixtures.py`), not
 > an on-chain result. Run `interact_live.py seed` once `TELEMETRY_BASE_URL` is set.
 
@@ -233,37 +243,49 @@ cd frontend && npm run dev      # http://localhost:5173  (syncs deployments/stud
 
 ---
 
-## 7. Limitations and game-theoretic trust model
+## 7. Design boundaries & testnet threat model
 
-**What is trustless.** The rating arithmetic, the ceiling clamp, fraud detection, the bond economics, interest
-accrual and the loss waterfall are deterministic contract code. Validators re-derive them independently; the
-leader cannot assert numbers the validators do not reproduce within 2%.
+### Audit findings and their fixes
 
-**What is trusted, and why it is bounded.**
+| # | Severity | Finding | Fix (regression test) |
+|---|----------|---------|-----------------------|
+| 1 | Critical | Any address could submit another entity's public telemetry (e.g. `telemetry/aether.json`) and borrow against its rating | `borrower_address` is required in the telemetry and compared (case-insensitive) with the borrower inside the consensus round; mismatch reverts `ERR_BORROWER_MISMATCH` before any rating. (`test_foreign_telemetry_replay_rejected`) |
+| 2 | Critical | Sybil addresses could each borrow within their own limit until the pool hit 100% utilisation | Hard cap `total_borrowed + drawdown ≤ 60% of total_assets`, `ERR_POOL_CAP_REACHED`. (`test_global_utilization_cap_enforced`) |
+| 3 | High | Overdue loans kept nominal value in LP NAV, so early LPs could exit at par and leave the loss to the last LP | `get_total_assets()` marks every loan past its due date to 0; deposits/withdrawals/LP values use the marked-down NAV, so all holders share the loss pro rata; deposits are blocked while any loan is delinquent. (`test_delinquent_loan_bad_debt_haircut`, `test_early_exit_cannot_dump_loss_on_late_lp`) |
+| 4a | Medium | A flat 0.1 GEN bond made large defaults profitable | bond = `max(0.1 GEN, 15% of limit)`. (`test_proportional_bond_scaling`) |
+| 4b | Medium | Due dates could be rolled forward indefinitely | 12-month `loan_expiry`, due date clamped to it, instalments amortise toward it. (`test_absolute_maturity_enforced`) |
+| 4c | Medium | SSRF via the telemetry URI | every IP literal (any spelling), localhost, `.local/.internal`, `nip.io`-style wildcard DNS, userinfo, IPv6 and cloud-metadata hosts are refused. (`test_ssrf_hosts_rejected`) |
 
-* **Telemetry authenticity.** The proof digest proves the *log is internally consistent*, not that the
-  transactions happened. An applicant who fabricates a self-consistent log is not detected by the contract. The
-  defences are economic: the 0.1 GEN bond is at risk on every application, the corroboration cap limits uncorroborated
-  revenue to speculative tiers, and advance rates cap the loan at a fraction of ARR. A production system would
-  anchor telemetry to signed oracle attestations (e.g. a payments processor signature) or verifiable on-chain
-  inflows.
-* **The LLM committee** can only lower a rating (≤ 2 notches), and a lenient model changes nothing, so the
-  attack surface is a *griefing* downgrade, mitigated by validator agreement within one notch and leader rotation.
-* **Under-collateralisation is real credit risk.** Bond (0.1 GEN) ≪ credit line. A borrower who draws and stops
-  paying costs LPs the unrecovered principal after the bond and the insurance reserve. The rational-borrower
-  condition is `value of future credit access + bond > amount defaulted`; for one-shot actors it does not hold,
-  hence the 60% concentration cap, the ARR-linked advance rate, and the ban on defaulters. Sybil identities cost
-  0.1 GEN each, which bounds, but does not eliminate, repeated-identity attacks.
-* **Governor** (the deployer) can freeze/unfreeze borrowers, set `usd_per_gen` (bounded 1 000–10 000 000) and
-  rotate itself. It cannot move funds, change ratings, or touch LP capital.
-* **Re-rating** is allowed only for debt-free `ACTIVE` lines. There is no mid-loan covenant re-rating.
-* **Simple interest, 30-day periods, fixed 12-month schedule view.** No compounding, no early-repayment fees,
-  no variable-rate resets.
-* **GEN/USD.** No price oracle on a test network; `usd_per_gen` is a notional and a trust assumption.
-* **Native transfers** use `emit_transfer(on="finalized")` and settle asynchronously after finalization.
-* **Direct tests** run the leader path only; full validator agreement is exercised live.
+### The off-chain oracle boundary (read this before trusting a rating)
 
----
+This is a **testnet proof of concept**. Telemetry is a JSON document the borrower hosts; the contract does not (and
+cannot) know whether the numbers are true. What the protocol does and does not establish:
+
+* **Established on-chain:** the document names *this* borrower; it is internally consistent (proof digest, no
+  duplicate/negative transactions, totals, ARR); every ratio is recomputed deterministically; validators agree on the
+  same figures; the LLM can only lower the rating.
+* **Not established:** that the revenue, treasury and transactions are real. `borrower_address` is a *self-asserted*
+  binding, not a signature: whoever controls the hosted file can write any address into it, but a file served for
+  borrower A cannot rate borrower B, and a self-consistent lie costs the liar a bond of ≥ 15% of the line.
+* **Production path:** replace the self-asserted file with an attestation signed by a data provider or by the
+  corporate key (the schema reserves room for an optional signature, currently ignored), verified in the validator
+  round (`ecrecover`-style) against a registered signer; anchor inflows to verifiable on-chain transfers.
+
+### Remaining limitations
+
+* **Under-collateralised credit is real credit risk.** With a ≥ 15% bond, a default now costs the borrower the bond
+  but still costs LPs the rest; the 60% pool cap, 60% concentration cap, ARR-linked advance rate, bad-debt haircut
+  and the insurance reserve bound, not remove, that loss. Sybil identities each pay a ≥ 0.1 GEN bond.
+* **The LLM committee** can only downgrade (≤ 2 notches); its worst case is a griefing downgrade, limited by the
+  validator tolerance (within one notch) and leader rotation.
+* **Governor** can freeze/unfreeze borrowers, set `usd_per_gen` (bounded) and rotate itself; it cannot move funds
+  or change ratings.
+* **O(borrowers) NAV.** The delinquency mark loops over all borrowers per LP call; fine for a PoC registry, a
+  production pool would maintain an indexed delinquency set.
+* **Re-rating** only for debt-free `ACTIVE` lines. Simple interest; 30-day periods; no early-repayment fees.
+* **GEN/USD** is a governor-set notional (no oracle on a test network).
+* **Native transfers** use `emit_transfer(on="finalized")` and settle after finalization.
+* **Direct tests** run the leader path only; validator agreement is exercised live.
 
 ## 8. Repository
 

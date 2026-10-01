@@ -1,5 +1,6 @@
 {
   "company": "HyperScale Labs",
+  "borrower_address": "0x65c0217208A713Ac7F5d5A08C0ED65F4a34A875e",
   "period": "2026-09",
   "monthly_revenue_usd": 60000,
   "monthly_opex_usd": 180000,

@@ -34,7 +34,12 @@ def digest(txs) -> str:
     return hashlib.sha256(json.dumps(txs, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def preflight_feed(url: str) -> None:
+def bond_for(limit: int) -> int:
+    """Proportional underwriting bond: max(0.1 GEN, 15% of the requested limit)."""
+    return max(BOND, limit * 15 // 100)
+
+
+def preflight_feed(url: str, borrower: str) -> None:
     """Fetch the feed exactly as a validator would and check its proof."""
     with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 - https URL we host
         if r.status != 200:
@@ -42,6 +47,8 @@ def preflight_feed(url: str) -> None:
         body = json.loads(r.read())
     if body.get("proof_sha256") != digest(body.get("transactions", [])):
         raise SystemExit(f"telemetry feed {url} fails its own proof digest")
+    if str(body.get("borrower_address", "")).lower() != borrower.lower():
+        raise SystemExit(f"telemetry feed {url} is bound to {body.get('borrower_address')}, not {borrower}")
     print(f"    feed ok: {url}")
 
 
@@ -68,9 +75,9 @@ def seed_entity(rec: dict, name: str, chain: Chain) -> None:
     print(f"[{company}] {chain.address}")
     p = profile(chain)
     if p is None or p["status"] in ("INCONCLUSIVE", "CLOSED"):
-        preflight_feed(url)
-        chain.fund(2 * ATTO)
-        record(rec, f"apply_for_credit {company}", chain.write("apply_for_credit", [company, url, limit], BOND, f"apply {slug}"))
+        preflight_feed(url, chain.address)
+        chain.fund(limit + ATTO)
+        record(rec, f"apply_for_credit {company}", chain.write("apply_for_credit", [company, url, limit], bond_for(limit), f"apply {slug}"))
         p = profile(chain)
     if name == "ZEROPROOF":
         print(f"    left {p['status']} for live steward review")

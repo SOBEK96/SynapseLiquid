@@ -15,8 +15,13 @@ def c(direct_vm, direct_deploy, direct_alice):
     return c
 
 
-def load(name):
-    return json.loads((TEL / f"{name}.json").read_text())
+def load(name, bound=False):
+    """The shipped documents are bound to the live testnet accounts; the harness
+    accounts differ, so strip the binding and let onboard() bind to the borrower."""
+    doc = json.loads((TEL / f"{name}.json").read_text())
+    if not bound:
+        doc.pop("borrower_address")
+    return doc
 
 
 @pytest.mark.parametrize("name", ["aether", "hyperscale", "zeroproof"])
@@ -24,6 +29,12 @@ def test_fixture_proof_digest_is_valid(name):
     doc = load(name)
     assert doc["proof_sha256"] == proof(doc["transactions"])
     assert doc["verified_onchain_inflows_usd"] == sum(t["amount_usd"] for t in doc["transactions"])
+
+
+@pytest.mark.parametrize("name", ["aether", "hyperscale", "zeroproof"])
+def test_fixture_is_bound_to_an_address(name):
+    import re
+    assert re.fullmatch(r"0x[0-9a-fA-F]{40}", load(name, bound=True)["borrower_address"])
 
 
 def test_aether_fixture_is_aaa_28_months(c, direct_vm, direct_bob):
