@@ -157,14 +157,19 @@ def draw(c, vm, who, amount):
     return draw_raw(c, vm, who, amount)
 
 
-def draw_second_tranche(c, vm, who, amount):
-    """Open tranche 2 the only legitimate way: pay one installment, then wait out
-    the full 30-day cycle since the first drawdown, staying current."""
+def draw_second_tranche(c, vm, who, amount=None):
+    """Open tranche 2 the only legitimate way: pay one installment, wait out the
+    30-day cycle since the first drawdown, repay 35% of the first tranche as
+    PRINCIPAL, then draw (default: the rest of the line)."""
     k = key(c, vm, who)
     repay(c, vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))
     advance(vm, PAYMENT_CYCLE + 1)
-    repay(c, vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))  # stay current
-    return draw_raw(c, vm, who, amount)
+    s = c.get_schedule(k) if hasattr(c, "get_schedule") else c.get_borrower_schedule(k)
+    need = max(0, int(s["tranche_two_required_repaid"]) - int(s["principal_repaid"]))
+    repay(c, vm, who, int(s["accrued_interest"]) + need + 1 if need else int(s["minimum_payment"]))
+    s = c.get_borrower_schedule(k)
+    limit = int(c.get_credit_profile(k)["credit_limit"])
+    return draw_raw(c, vm, who, limit - int(s["principal"]) if amount is None else amount)
 
 
 def repay(c, vm, who, value):

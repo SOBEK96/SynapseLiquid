@@ -1,0 +1,11 @@
+{
+  "company": "Phantom Ledger Co",
+  "borrower_address": "0x7320eB5b1F07515eeC12612A10693f7C060B9dC6",
+  "period": "2026-09",
+  "monthly_revenue_usd": -500000,
+  "monthly_opex_usd": 100000,
+  "monthly_burn_usd": 233334,
+  "treasury_usd": 700000,
+  "claimed_rating": "AAA",
+  "narrative": "Fabricated figures. Used only to prove on-chain bond slashing."
+}

@@ -67,8 +67,22 @@ DOCS = {
                      "diversified across 31 integrators."),
 }
 
+# Deliberately fraudulent feed for the live bond-slash proof: NEGATIVE revenue while
+# claiming AAA. Mathematically impossible, so the contract slashes the bond.
+DOCS["fraud_demo"] = {
+    "company": "Phantom Ledger Co",
+    "borrower_address": ACCOUNTS["FRAUDSTER"].address,
+    "period": "2026-09",
+    "monthly_revenue_usd": -500_000,
+    "monthly_opex_usd": 100_000,
+    "monthly_burn_usd": 233_334,
+    "treasury_usd": 700_000,
+    "claimed_rating": "AAA",
+    "narrative": "Fabricated figures. Used only to prove on-chain bond slashing.",
+}
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     for key, body in DOCS.items():
         (OUT / f"{key}.json").write_text(json.dumps(body, indent=2) + "\n")
-        print(f"wrote telemetry/{key}.json  proof={body['proof_sha256'][:16]}...")
+        print(f"wrote telemetry/{key}.json  proof={str(body.get('proof_sha256', 'none (fraud demo)'))[:16]}")

@@ -28,7 +28,7 @@ EXPLORER = "https://explorer-studio-next.genlayer.com"
 ATTO = 10**18
 BOND = ATTO // 10
 
-KEY_NAMES = ("DEPLOYER", "AETHER", "HYPERSCALE", "ZEROPROOF")
+KEY_NAMES = ("DEPLOYER", "AETHER", "HYPERSCALE", "ZEROPROOF", "FRAUDSTER")
 
 
 # --------------------------------------------------------------------- .env keys

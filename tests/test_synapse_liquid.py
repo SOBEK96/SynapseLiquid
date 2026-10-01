@@ -512,9 +512,72 @@ def test_tranche_two_blocked_for_a_full_cycle_after_first_drawdown(c, direct_vm,
     advance(direct_vm, 61)
     s = c.get_borrower_schedule(k)
     assert s["tranche_two_opens_at"] == s["first_draw_at"] + PAYMENT_CYCLE
-    repay(c, direct_vm, direct_bob, int(s["minimum_payment"]))  # stay current across the cycle
-    owed = int(c.get_borrower_schedule(k)["principal"])
-    draw_raw(c, direct_vm, direct_bob, limit - owed)  # tranche 2: the rest of the line
+
+
+# ============ FINAL AUDIT 4: tranche 2 needs 35% of the first tranche repaid as principal ============
+def _first_tranche_then_cycle(c, direct_vm, who):
+    """First tranche drawn, one installment paid, a full 30-day cycle elapsed, borrower current."""
+    k, out = onboard(c, direct_vm, who)
+    limit = int(out["credit_limit"])
+    draw_raw(c, direct_vm, who, limit // 2)
+    repay(c, direct_vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))
+    advance(direct_vm, PAYMENT_CYCLE + 1)
+    repay(c, direct_vm, who, int(c.get_borrower_schedule(k)["minimum_payment"]))
+    return k, limit
+
+
+def test_tranche_two_fails_until_35_percent_principal_is_repaid(c, direct_vm, direct_bob):
+    """PoC (audit): patient attacker draws 50%, waits 30 days, pays a token
+    installment and tries for the other 50%."""
+    k, limit = _first_tranche_then_cycle(c, direct_vm, direct_bob)
+    s = c.get_borrower_schedule(k)
+    assert s["installments_paid"] >= 1 and int(s["principal_repaid"]) < int(s["tranche_two_required_repaid"])
+    rest = limit - int(s["principal"])
+    with direct_vm.expect_revert("ERR_TRANCHE_PRINCIPAL_AMORTIZATION_INSUFFICIENT"):
+        draw_raw(c, direct_vm, direct_bob, rest)
+    assert c.get_credit_profile(k)["borrowed_amount"] == s["principal"]
+
+
+def test_tranche_two_requirement_is_35_percent_of_the_first_tranche(c, direct_vm, direct_bob):
+    k, limit = _first_tranche_then_cycle(c, direct_vm, direct_bob)
+    s = c.get_borrower_schedule(k)
+    assert int(s["tranche_two_required_repaid"]) == (limit * 50 // 100) * 35 // 100
+    assert int(s["tranche_two_required_repaid"]) * 1000 >= limit * 175 - 1000  # ~17.5% of the line
+
+
+def test_tranche_two_unlocks_exactly_at_the_threshold(c, direct_vm, direct_bob):
+    k, limit = _first_tranche_then_cycle(c, direct_vm, direct_bob)
+    s = c.get_borrower_schedule(k)
+    need = int(s["tranche_two_required_repaid"]) - int(s["principal_repaid"])
+    assert need > 0
+    repay(c, direct_vm, direct_bob, int(s["accrued_interest"]) + need - 1)  # one wei short
+    s = c.get_borrower_schedule(k)
+    assert int(s["principal_repaid"]) == int(s["tranche_two_required_repaid"]) - 1
+    with direct_vm.expect_revert("ERR_TRANCHE_PRINCIPAL_AMORTIZATION_INSUFFICIENT"):
+        draw_raw(c, direct_vm, direct_bob, limit - int(s["principal"]))
+    repay(c, direct_vm, direct_bob, int(c.get_borrower_schedule(k)["accrued_interest"]) + 1)
+    s = c.get_borrower_schedule(k)
+    assert int(s["principal_repaid"]) >= int(s["tranche_two_required_repaid"])
+    draw_raw(c, direct_vm, direct_bob, limit - int(s["principal"]))  # tranche 2 now opens
+    assert c.get_credit_profile(k)["borrowed_amount"] == str(limit)
+
+
+def test_interest_payments_do_not_count_as_principal_amortization(c, direct_vm, direct_bob):
+    k, limit = _first_tranche_then_cycle(c, direct_vm, direct_bob)
+    before = int(c.get_borrower_schedule(k)["principal_repaid"])
+    advance(direct_vm, 5 * DAY)  # let some interest accrue
+    s = c.get_borrower_schedule(k)
+    assert int(s["accrued_interest"]) > 0
+    repay(c, direct_vm, direct_bob, int(s["accrued_interest"]))  # pure interest
+    assert int(c.get_borrower_schedule(k)["principal_repaid"]) == before
+
+
+def test_patient_attacker_must_inject_capital_before_tranche_two(c, direct_vm, direct_bob):
+    k, limit = _first_tranche_then_cycle(c, direct_vm, direct_bob)
+    before = int(c.get_borrower_schedule(k)["principal_repaid"])
+    draw_second_tranche(c, direct_vm, direct_bob)
+    s = c.get_borrower_schedule(k)
+    assert int(s["principal_repaid"]) >= (limit * 50 // 100) * 35 // 100 > before
     assert c.get_credit_profile(k)["borrowed_amount"] == str(limit)
 
 
@@ -531,8 +594,8 @@ def test_second_tranche_helper_path_is_the_only_way(c, direct_vm, direct_bob):
     k, out = onboard(c, direct_vm, direct_bob)
     limit = int(out["credit_limit"])
     draw_raw(c, direct_vm, direct_bob, limit // 2)
-    draw_second_tranche(c, direct_vm, direct_bob, MIN_DRAW)
-    assert int(c.get_borrower_schedule(k)["principal"]) > limit // 2 - limit // 12
+    draw_second_tranche(c, direct_vm, direct_bob)
+    assert c.get_credit_profile(k)["borrowed_amount"] == str(limit)
 
 
 def test_delinquent_borrower_cannot_open_the_second_tranche(c, direct_vm, direct_bob):
@@ -588,20 +651,67 @@ def test_minor_liquidation_does_not_pause(c, direct_vm, direct_alice, direct_bob
 # ============ FINAL AUDIT 3: dust floor and slot eviction ============
 def test_dust_drawdown_is_refused(c, direct_vm, direct_bob):
     k, _ = onboard(c, direct_vm, direct_bob, limit=ATTO)
-    for dust in (1, 10**15, MIN_DRAW - 1):
+    floor = int(c.get_credit_profile(k)["min_drawdown"])
+    assert floor == ATTO // 20  # min(0.05 GEN, 25% of a 1 GEN line)
+    for dust in (1, 10**15, floor - 1):
         with direct_vm.expect_revert("ERR_DRAWDOWN_TOO_SMALL"):
             draw_raw(c, direct_vm, direct_bob, dust)
     assert c.get_pool_metrics()["active_borrowers"] == 0  # no slot was squatted
-    draw_raw(c, direct_vm, direct_bob, MIN_DRAW)  # exactly the floor is fine
+    draw_raw(c, direct_vm, direct_bob, floor)  # exactly the floor is fine
     assert c.get_pool_metrics()["active_borrowers"] == 1
 
 
-def test_lines_too_small_for_the_floor_cannot_squat_a_slot(c, direct_vm, direct_bob):
-    k, out = onboard(c, direct_vm, direct_bob, body=hyperscale(), limit=ATTO, name="Tiny")
-    assert int(out["credit_limit"]) < MIN_DRAW  # a C-rated 0.115 GEN line
-    with direct_vm.expect_revert():
-        draw_raw(c, direct_vm, direct_bob, int(out["credit_limit"]) // 2)
-    assert c.get_pool_metrics()["active_borrowers"] == 0
+@pytest.mark.parametrize("limit", [ATTO, 3 * ATTO, ATTO // 5, 8 * ATTO // 10, ATTO // 10])
+def test_floor_is_min_of_five_cents_and_a_quarter_of_the_line(c, direct_vm, direct_bob, limit):
+    k, out = onboard(c, direct_vm, direct_bob, limit=limit)
+    cl = int(out["credit_limit"])
+    assert int(c.get_credit_profile(k)["min_drawdown"]) == min(ATTO // 20, cl * 25 // 100)
+
+
+def test_point_eight_gen_line_can_draw_its_tranche(c, direct_vm, direct_bob):
+    """Tier-B-sized line: the old flat 0.5 GEN floor made a 0.4 GEN first tranche undrawable."""
+    k, out = onboard(c, direct_vm, direct_bob, limit=8 * ATTO // 10)
+    assert out["credit_limit"] == str(8 * ATTO // 10)
+    p = c.get_credit_profile(k)
+    assert p["first_tranche_cap"] == str(4 * ATTO // 10) and p["min_drawdown"] == str(ATTO // 20)
+    with direct_vm.expect_revert("ERR_DRAWDOWN_TOO_SMALL"):
+        draw_raw(c, direct_vm, direct_bob, ATTO // 20 - 1)
+    with direct_vm.expect_revert("ERR_TRANCHE_CAP"):
+        draw_raw(c, direct_vm, direct_bob, 4 * ATTO // 10 + 1)
+    draw_raw(c, direct_vm, direct_bob, 4 * ATTO // 10)
+    assert c.get_credit_profile(k)["borrowed_amount"] == str(4 * ATTO // 10)
+
+
+def test_hyperscale_c_line_can_draw_its_tranche(c, direct_vm, direct_bob):
+    """The 0.1152 GEN tier-C line (formerly stuck under the 0.5 GEN floor) draws."""
+    k, out = onboard(c, direct_vm, direct_bob, body=hyperscale(), limit=ATTO, name="HyperScale Labs")
+    limit = int(out["credit_limit"])
+    assert out["rating"] == "C" and limit < ATTO // 5
+    p = c.get_credit_profile(k)
+    floor, cap = int(p["min_drawdown"]), int(p["first_tranche_cap"])
+    assert floor == limit * 25 // 100 and cap == limit // 2 and floor < cap
+    with direct_vm.expect_revert("ERR_DRAWDOWN_TOO_SMALL"):
+        draw_raw(c, direct_vm, direct_bob, floor - 1)
+    draw_raw(c, direct_vm, direct_bob, cap)
+    assert c.get_pool_metrics()["active_borrowers"] == 1
+    assert c.get_credit_profile(k)["interest_rate_bps"] == 3500
+
+
+def test_small_line_still_obeys_tranche_two_amortization(c, direct_vm, direct_bob):
+    k, out = onboard(c, direct_vm, direct_bob, body=hyperscale(), limit=ATTO, name="HyperScale Labs")
+    limit = int(out["credit_limit"])
+    draw_raw(c, direct_vm, direct_bob, limit // 2)
+    floor = int(c.get_credit_profile(k)["min_drawdown"])
+    with direct_vm.expect_revert("ERR_TRANCHE_CAP"):  # a floor-sized top-up would cross 50%
+        draw_raw(c, direct_vm, direct_bob, floor)
+
+
+def test_small_line_exact_headroom_may_be_below_the_floor(c, direct_vm, direct_bob):
+    """The one sub-floor draw allowed is the one that exactly exhausts an open line."""
+    k, out = onboard(c, direct_vm, direct_bob, limit=ATTO)  # floor 0.05
+    draw_raw(c, direct_vm, direct_bob, ATTO // 2)
+    draw_second_tranche(c, direct_vm, direct_bob)
+    assert c.get_credit_profile(k)["borrowed_amount"] == str(ATTO)
 
 
 def test_borrower_evicted_the_moment_debt_hits_zero(c, direct_vm, direct_bob):

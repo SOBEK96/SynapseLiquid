@@ -7,6 +7,8 @@
   seed             Entity #1 Aether (AAA, drawn down), #2 HyperScale (C),
                    #3 ZeroProof (left PENDING). Idempotent: skips finished steps.
   assess-zeroproof run consensus assessment for the PENDING entity #3
+  seed-fraud       a throwaway borrower submits IMPOSSIBLE telemetry (negative revenue
+                   claiming AAA): the live proof of REJECTED + bond slashing
   status           print pool metrics and every credit profile
 
 Telemetry documents (telemetry/*.json) must be reachable over public https at
@@ -20,6 +22,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 
 from lib import (ATTO, BOND, Chain, ChainError, load_accounts, load_deployment, save_deployment,
@@ -28,7 +31,7 @@ from lib import (ATTO, BOND, Chain, ChainError, load_accounts, load_deployment, 
 ENTITIES = {
     # name, company, requested limit (GEN), draw (GEN)
     "AETHER": ("aether", "Aether Infrastructure", 3 * ATTO, 3 * ATTO // 2),
-    "HYPERSCALE": ("hyperscale", "HyperScale Labs", ATTO, 0),
+    "HYPERSCALE": ("hyperscale", "HyperScale Labs", ATTO, ATTO),  # drawn at its (small) first tranche
     "ZEROPROOF": ("zeroproof", "ZeroProof Systems", 2 * ATTO, 0),
 }
 
@@ -102,6 +105,38 @@ def seed_entity(rec: dict, name: str, chain: Chain) -> None:
         print(f"    drew {draw / ATTO} GEN")
 
 
+def seed_fraud(rec: dict, chain: Chain) -> None:
+    base = telemetry_base_url()
+    if not base:
+        raise SystemExit("set TELEMETRY_BASE_URL / --base-url")
+    url = f"{base}/fraud_demo.json"
+    limit = ATTO
+    print(f"[Phantom Ledger Co] {chain.address}")
+    p = profile(chain)
+    if p is not None and p["status"] == "REJECTED":
+        print("    already REJECTED on chain; nothing to do")
+        return
+    try:
+        with urllib.request.urlopen(url, timeout=20) as r:  # noqa: S310 - https URL we host
+            body = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"{url} returned HTTP {e.code}: push telemetry/fraud_demo.json to the repo first "
+                         "(no bond was posted)")
+    if str(body.get("borrower_address", "")).lower() != chain.address.lower():
+        raise SystemExit(f"fraud feed is bound to {body.get('borrower_address')}, not {chain.address}")
+    print(f"    feed reachable: {url} (revenue {body.get('monthly_revenue_usd')})")
+    chain.fund(limit)
+    if p is None or p["status"] in ("INCONCLUSIVE", "CLOSED"):
+        record(rec, "apply_for_credit Phantom Ledger Co (fraud demo)",
+               chain.write("apply_for_credit", ["Phantom Ledger Co", url, limit], bond_for(limit), "apply fraud"))
+    record(rec, "assess_credit_consensus Phantom Ledger Co (FRAUD -> bond slashed)",
+           chain.write("assess_credit_consensus", [chain.address], 0, "assess fraud"))
+    p = profile(chain)
+    print(f"    status={p['status']} reason={p['assessment_reason']}")
+    m = chain.read("get_pool_metrics")
+    print(f"    cumulative_slashed={int(m['cumulative_slashed']) / ATTO} GEN  insurance_reserve={int(m['insurance_reserve']) / ATTO} GEN")
+
+
 def status(chain: Chain) -> None:
     print(json.dumps(chain.read("get_pool_metrics"), indent=2))
     for i in range(int(chain.read("get_borrower_count"))):
@@ -113,7 +148,7 @@ def status(chain: Chain) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("cmd", nargs="?", default="status", choices=["seed", "assess-zeroproof", "status"])
+    ap.add_argument("cmd", nargs="?", default="status", choices=["seed", "seed-fraud", "assess-zeroproof", "status"])
     ap.add_argument("--base-url", help="public https folder serving <slug>.json (overrides TELEMETRY_BASE_URL)")
     args = ap.parse_args()
     cmd = args.cmd
@@ -128,6 +163,9 @@ def main() -> None:
         if cmd == "seed":
             for name in ("AETHER", "HYPERSCALE", "ZEROPROOF"):
                 seed_entity(rec, name, chains[name])
+            status(chains["DEPLOYER"])
+        elif cmd == "seed-fraud":
+            seed_fraud(rec, chains["FRAUDSTER"])
             status(chains["DEPLOYER"])
         elif cmd == "assess-zeroproof":
             c = chains["DEPLOYER"]  # permissionless: any steward may trigger consensus

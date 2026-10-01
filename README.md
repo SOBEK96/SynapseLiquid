@@ -22,23 +22,24 @@ the interest rate, credit limit and amortisation schedule directly to that ratin
 
 <!-- PROOFS:START -->
 - **Network:** GenLayer Studio Next · chain `61997` (`0xF22D`) · RPC `https://studio-next.genlayer.com/api`
-- **Contract:** [`0x0d7A691c6280cccD6A1D9392d9Fd5f901dd3C5Bf`](https://explorer-studio-next.genlayer.com/address/0x0d7A691c6280cccD6A1D9392d9Fd5f901dd3C5Bf)
-- **Source SHA-256 (`contracts/synapse_liquid.py`):** `2fca6116adcecf0b1d06768813b983a151ec1a5b0b94c2efc82a7e602836d790`
+- **Contract:** [`0x2D270b1E3457565D67E064BaD21632c99d9DA754`](https://explorer-studio-next.genlayer.com/address/0x2D270b1E3457565D67E064BaD21632c99d9DA754)
+- **Source SHA-256 (`contracts/synapse_liquid.py`):** `20c74455211e29a2d5eb8eb7485431c009fcd3b62bd3721aeab4f8ec8fba3ab4`
 - **Runner:** `py-genlayer:5jycge4q8k23462jtb0b9fyey1s9qz928sz2nbrd9mg4sxqg2qng`
-- **Deployed:** 2026-10-01T14:53:42.250394+00:00
+- **Deployed:** 2026-10-01T15:34:48.056325+00:00
 - **Superseded contract:** [`0x83709BEABCeC81C53fB776b37089Cdee976b3069`](https://explorer-studio-next.genlayer.com/address/0x83709BEABCeC81C53fB776b37089Cdee976b3069) — do not use
 - **Superseded contract:** [`0xb4c01554C5C30ae3Cc706118460c7887E918650a`](https://explorer-studio-next.genlayer.com/address/0xb4c01554C5C30ae3Cc706118460c7887E918650a) — do not use
 - **Superseded contract:** [`0x9A43e6660f9a4165F7BD5a911B15Dd2ae2381775`](https://explorer-studio-next.genlayer.com/address/0x9A43e6660f9a4165F7BD5a911B15Dd2ae2381775) — do not use
+- **Superseded contract:** [`0x0d7A691c6280cccD6A1D9392d9Fd5f901dd3C5Bf`](https://explorer-studio-next.genlayer.com/address/0x0d7A691c6280cccD6A1D9392d9Fd5f901dd3C5Bf) — do not use
 
 | # | Action | Transaction |
 |---|--------|-------------|
-| 1 | deploy | [`0xd0acca9a…43a0e3bf`](https://explorer-studio-next.genlayer.com/transactions/0xd0acca9aa33f2919fcb5619a33f824d94e3fa402befe78fa22437b7d43a0e3bf) |
-| 2 | seed_liquidity 5.0 GEN | [`0xde4d6aae…5fb9a420`](https://explorer-studio-next.genlayer.com/transactions/0xde4d6aae78f01bdc4300fe3f2b15bdf36cee0c9fb282609ffb7015935fb9a420) |
-| 3 | apply_for_credit Aether Infrastructure | [`0xb821533d…a1663dc4`](https://explorer-studio-next.genlayer.com/transactions/0xb821533df652e6ea873f2781d9f8e190322da2b3a191da5811be8884a1663dc4) |
-| 4 | assess_credit_consensus Aether Infrastructure | [`0xcc40d1e4…7b47976c`](https://explorer-studio-next.genlayer.com/transactions/0xcc40d1e483986ebbc50d5176b04333fcd858858a34ade108851d09817b47976c) |
-| 5 | apply_for_credit HyperScale Labs | [`0x5a2a138f…f4613d78`](https://explorer-studio-next.genlayer.com/transactions/0x5a2a138fe7468b0742fb578276a0793bc29a4e565bf8438ea14af5b1f4613d78) |
-| 6 | assess_credit_consensus HyperScale Labs | [`0x34e3bda9…ed1d7c8c`](https://explorer-studio-next.genlayer.com/transactions/0x34e3bda9d1d2e1f5ced4717e3f753270d5784f73fe7598a3a2bb0bcced1d7c8c) |
-| 7 | apply_for_credit ZeroProof Systems | [`0x946dfafc…898edfbe`](https://explorer-studio-next.genlayer.com/transactions/0x946dfafc5d6ce89bbc8a8ab91ad74bcc81d104473220fc7e6e22fd84898edfbe) |
+| 1 | deploy | [`0x736a9581…d928e3c7`](https://explorer-studio-next.genlayer.com/transactions/0x736a958157069fc19e8a5914002adcdb215926949ea70a0ef2d5b288d928e3c7) |
+| 2 | seed_liquidity 5.0 GEN | [`0x8844dfc0…479347f3`](https://explorer-studio-next.genlayer.com/transactions/0x8844dfc05cf33a4e5862c96240eac06bf975c56a4c9cb3b8612d76ec479347f3) |
+| 3 | apply_for_credit Aether Infrastructure | [`0xa6d59d85…eef49b68`](https://explorer-studio-next.genlayer.com/transactions/0xa6d59d854c9bd0ab15fef20431b1d468a7bcb37fca29121c3e12cb84eef49b68) |
+| 4 | assess_credit_consensus Aether Infrastructure | [`0x8293bf0a…9dfba0a6`](https://explorer-studio-next.genlayer.com/transactions/0x8293bf0ab584ec731dd1bffabd05bbdff5c9ae64bf8ec45efbaa54cc9dfba0a6) |
+| 5 | apply_for_credit HyperScale Labs | [`0xb937c8fa…35fc008f`](https://explorer-studio-next.genlayer.com/transactions/0xb937c8fa8150ee0ed8f7365a0db06d0ba20ba653f48e1c476898384335fc008f) |
+| 6 | assess_credit_consensus HyperScale Labs | [`0xf942c67d…42cb1ee0`](https://explorer-studio-next.genlayer.com/transactions/0xf942c67d79445c053ee2ca75f4693ec526abeb16826c77574d37c8e042cb1ee0) |
+| 7 | apply_for_credit ZeroProof Systems | [`0x0fb2ae1a…87b74184`](https://explorer-studio-next.genlayer.com/transactions/0x0fb2ae1a4c8a66f9f0013e2984b4c8f8907d8473588b7dde7656211f87b74184) |
 <!-- PROOFS:END -->
 
 Every row is a Studio Next transaction decided by validator consensus. The contract's own accounting is checked
@@ -93,11 +94,16 @@ Mathematics sets a **ceiling**; the LLM committee may only move the rating **dow
   amortises to zero by the terminal date. Past maturity the loan is delinquent.
 * **Drawdown cooldown.** No drawdown until 24 h after the assessment (`ERR_COOLDOWN_ACTIVE`); a re-assessment
   restarts it. Telemetry cannot be cashed out in the same breath it was produced.
-* **Tranche cap and time-lock.** At most 50% of the approved limit may be outstanding until (a) the borrower has paid
-  one on-time installment (`ERR_TRANCHE_CAP`) **and** (b) one full 30-day payment cycle has elapsed since the first
-  drawdown (`ERR_TRANCHE_COOLDOWN_ACTIVE`). Paying a token installment seconds after drawing does not unlock tranche 2.
-* **Dust floor.** Every drawdown is ≥ 0.5 GEN (`ERR_DRAWDOWN_TOO_SMALL`), except the draw that exactly exhausts an
-  open line's headroom. With the 50% first tranche this makes 1 GEN the smallest usable line.
+* **Tranche cap, time-lock and amortization.** At most 50% of the approved limit may be outstanding until **all** of:
+  (a) one on-time installment has been paid (`ERR_TRANCHE_CAP`); (b) one full 30-day payment cycle has elapsed since
+  the first drawdown (`ERR_TRANCHE_COOLDOWN_ACTIVE`); and (c) cumulative **principal** repaid is at least **35% of the
+  first tranche** (`limit × 50% × 35%`, i.e. 17.5% of the line; `ERR_TRANCHE_PRINCIPAL_AMORTIZATION_INSUFFICIENT`).
+  Interest does not count. A patient attacker therefore has to put real capital back into the pool before taking
+  the second half, which removes the profit from drawing, waiting and defaulting.
+* **Proportional dust floor.** Every drawdown is ≥ `min(0.05 GEN, 25% of the credit line)`
+  (`ERR_DRAWDOWN_TOO_SMALL`), except the draw that exactly exhausts an open line's headroom. Small lines stay usable:
+  a 0.8 GEN line has a 0.05 GEN floor and a 0.4 GEN first tranche; the 0.1152 GEN tier-C line has a 0.0288 GEN floor
+  and a 0.0576 GEN first tranche.
 * **Post-liquidation pause.** A liquidation of ≥ 10% of pool assets pauses all new drawdowns for 72 h
   (`ERR_POOL_PAUSED`); repayments and LP exits stay open.
 * **Bounded loops.** NAV/delinquency walk a registry of borrowers with debt outstanding (swap-remove, O(1) updates),
@@ -205,7 +211,7 @@ array. `scripts/make_telemetry.py` builds valid documents.
 
 ```bash
 uv venv --python 3.12 && uv pip install --prerelease=allow -r requirements.txt
-.venv/bin/pytest tests/direct -q          # 312 in-memory GenVM tests (run the files as parallel pytest processes; ~100 s each)
+.venv/bin/pytest tests/direct -q          # 325 in-memory GenVM tests (run the files as parallel pytest processes; ~100 s each)
 .venv/bin/genvm-lint check contracts/synapse_liquid.py
 cd frontend && npm install && npm run build   # tsc + vite, 0 errors
 npm run console-check                          # headless Chrome: zero console errors on the live contract
@@ -247,10 +253,13 @@ TELEMETRY_BASE_URL=https://<host>/telemetry ../.venv/bin/python interact_live.py
 > **Live status.** On the current contract, validators fetched the address-bound feeds from
 > `raw.githubusercontent.com/SOBEK96/SynapseLiquid/main/telemetry` and reached consensus: **Aether `AAA` (4.00% APR,
 > DSCR 3.82×, 28 mo runway, 3.0 GEN limit)** and **HyperScale `C` (35.00% APR, DSCR 0, 0.1152 GEN limit)** are
-> `ACTIVE`; **ZeroProof is `PENDING`** for the live steward review (`interact_live.py assess-zeroproof`). Aether's
-> first-tranche drawdown is **not yet executed**: the mandatory 24 h cooldown after assessment ends
-> 2026-10-02 14:55 UTC, after which `interact_live.py seed` draws it (≤ 1.5 GEN, the 50% tranche). HyperScale's line is
-> below the 0.5 GEN drawdown floor, so it can be rated but never drawn. The transactions are in the table in section 1.
+> `ACTIVE`; **ZeroProof is `PENDING`** for the live steward review (`interact_live.py assess-zeroproof`). **No
+> drawdown has been executed yet:** the mandatory 24 h cooldown ends 2026-10-02 15:36 UTC, after which
+> `interact_live.py seed` draws Aether's first tranche (1.5 GEN) and HyperScale's (0.0576 GEN, which the proportional
+> floor now allows). **Live fraud rejection is prepared but not yet run:** `telemetry/fraud_demo.json` (negative revenue
+> claiming AAA, bound to a throwaway account) must first exist at the telemetry URL; then
+> `interact_live.py seed-fraud` records a `REJECTED` assessment with the bond slashed to the insurance reserve. The
+> transactions that did run are in the table in section 1.
 
 ---
 
@@ -302,7 +311,8 @@ without changing the rating logic.
 | Bad-debt haircut | loans past due are marked to 0 in LP NAV; deposits blocked while delinquent | early-exit-at-par, loss dumped on the last LP |
 | Drawdown cooldown | 24 h from assessment to first drawdown | cash-out of freshly self-generated telemetry |
 | Tranche cap + time-lock | ≤ 50% of the limit until an installment is paid *and* 30 days after the first drawdown | extracting the whole line in one transaction, or bumping `installments_paid` with a token payment |
-| Dust floor + eviction | drawdown ≥ 0.5 GEN; slot freed when debt is zero | squatting the 64 slots with dust loans |
+| Tranche-2 principal amortization | cumulative principal repaid ≥ 35% of the first tranche (17.5% of the line), on top of the time-lock | the patient attacker: draw 50%, wait, pay a token installment, take the rest, default |
+| Proportional dust floor + eviction | drawdown ≥ `min(0.05 GEN, 25% of line)`; slot freed when debt is zero | squatting the 64 slots with dust loans, without locking small lines out |
 | Post-liquidation pause | 72 h pool-wide drawdown pause after a liquidation of ≥ 10% of assets | recycling freed liquidity to the next Sybil |
 | Active-borrower registry | NAV loop over indebted borrowers only, ≤ 64 | gas DoS via empty/cancelled applications |
 | SSRF-hardened URI | public https DNS names only; every IP literal, localhost, `.internal/.local`, wildcard DNS, userinfo, IPv6, metadata hosts refused | validators being aimed at internal services |
@@ -319,15 +329,18 @@ without changing the rating logic.
 | Flat bond; rollovers; SSRF | Medium | proportional bond, absolute maturity, hardened URI (`test_proportional_bond_scaling`, `test_absolute_maturity_enforced`, `test_ssrf_hosts_rejected`) |
 | Linear borrower scan in NAV | Medium | active-borrower registry, bounded set (`test_registry_*`, `test_active_borrower_set_is_hard_bounded`) |
 | Tranche-2 bypass via token installment | High | 30-day tranche time-lock (`test_tranche_two_blocked_for_a_full_cycle_after_first_drawdown`) |
-| Registry slot squatting with dust loans | Medium | 0.5 GEN floor + immediate eviction (`test_dust_drawdown_is_refused`, `test_borrower_evicted_the_moment_debt_hits_zero`) |
+| Registry slot squatting with dust loans | Medium | dust floor + immediate eviction (`test_dust_drawdown_is_refused`, `test_borrower_evicted_the_moment_debt_hits_zero`) |
+| Hard 0.5 GEN floor locked out small lines (tiers B/C) | Medium | proportional floor (`test_point_eight_gen_line_can_draw_its_tranche`, `test_hyperscale_c_line_can_draw_its_tranche`) |
+| Patient attacker unlocks tranche 2 with a token installment | High | 35% principal amortization (`test_tranche_two_fails_until_35_percent_principal_is_repaid`, `test_tranche_two_unlocks_exactly_at_the_threshold`) |
 
 ### Residual risk and limitations
 
 * **A self-consistent lie is not detectable on-chain.** The controls above cap how much a liar can take and make it
   cost a bond; they do not make telemetry true. Under-collateralised lending remains real credit risk for LPs.
 * **Pause and cap are blunt.** A single large borrower can still trigger a pause; the 64-borrower bound is a PoC
-  limit, not a scalability claim. A well-funded attacker can still occupy slots with 0.5 GEN loans (each also costs a
-  bond of ≥ 0.1 GEN and a 24 h wait); the floor raises the price, it does not remove the attack.
+  limit, not a scalability claim. A well-funded attacker can still occupy slots with 0.05 GEN loans (each also costs a
+  bond of ≥ 0.1 GEN and a 24 h wait); the floor raises the price, it does not remove the attack. The proportional
+  floor deliberately trades slot-squatting cost for usable small lines.
 * **The LLM committee** can only downgrade; its worst case is griefing, limited by validator tolerance and rotation.
 * **Governor** (the deployer) can freeze/unfreeze borrowers, set `usd_per_gen` (bounded) and rotate itself; it cannot
   move funds or change ratings.

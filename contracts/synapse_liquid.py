@@ -51,6 +51,7 @@ ERR_COOLDOWN = f"{ERR_EXPECTED} ERR_COOLDOWN_ACTIVE"
 ERR_TRANCHE_CAP = f"{ERR_EXPECTED} ERR_TRANCHE_CAP"
 ERR_TRANCHE_COOLDOWN = f"{ERR_EXPECTED} ERR_TRANCHE_COOLDOWN_ACTIVE"
 ERR_DRAWDOWN_TOO_SMALL = f"{ERR_EXPECTED} ERR_DRAWDOWN_TOO_SMALL"
+ERR_TRANCHE_AMORTIZATION = f"{ERR_EXPECTED} ERR_TRANCHE_PRINCIPAL_AMORTIZATION_INSUFFICIENT"
 ERR_POOL_PAUSED = f"{ERR_EXPECTED} ERR_POOL_PAUSED"
 ERR_BORROWER_CAP = f"{ERR_EXPECTED} ERR_ACTIVE_BORROWER_CAP"
 
@@ -62,7 +63,9 @@ MAX_UTILIZATION_BPS = 6000  # protocol-wide ceiling on total_borrowed / total_as
 LOAN_MATURITY = 365 * 86400  # absolute terminal maturity of drawn debt
 DRAWDOWN_COOLDOWN = 24 * 3600  # assessment -> first drawdown
 PAYMENT_CYCLE_SECONDS = 30 * 86400  # tranche 2 unlocks no earlier than one full cycle after the first drawdown
-MIN_DRAWDOWN_AMOUNT = ATTO // 2  # 0.5 GEN: dust loans cannot squat a registry slot
+MIN_DRAWDOWN_CAP = ATTO // 20  # 0.05 GEN: the dust floor never exceeds this...
+MIN_DRAWDOWN_LIMIT_BPS = 2500  # ...nor 25% of the line, so small lines (tiers B/C) stay usable
+TRANCHE2_REPAID_BPS = 3500  # tranche 2 needs 35% of the FIRST tranche repaid as principal
 FIRST_TRANCHE_BPS = 5000  # until an installment is paid, at most 50% of the limit is outstanding
 MAJOR_LIQUIDATION_BPS = 1000  # a liquidation of >= 10% of pool assets is "major"
 LIQUIDATION_PAUSE = 72 * 3600  # pool-wide drawdown pause after a major liquidation
@@ -202,6 +205,16 @@ def _limit_usd(rating: str, arr: int, requested_usd: int) -> int:
 def _required_bond(requested_limit: int) -> int:
     """Skin in the game: never less than 0.1 GEN, never less than 15% of the line."""
     return max(UNDERWRITING_BOND, requested_limit * BOND_BPS // 10000)
+
+
+def _min_drawdown(credit_limit: int) -> int:
+    """Proportional dust floor: min(0.05 GEN, 25% of the credit line)."""
+    return min(MIN_DRAWDOWN_CAP, credit_limit * MIN_DRAWDOWN_LIMIT_BPS // 10000)
+
+
+def _tranche2_required_repaid(credit_limit: int) -> int:
+    """Principal that must have been repaid before tranche 2: 35% of the 50% first tranche."""
+    return (credit_limit * FIRST_TRANCHE_BPS // 10000) * TRANCHE2_REPAID_BPS // 10000
 
 
 def _months_left(now: int, expiry: int) -> int:
@@ -495,6 +508,7 @@ class DebtPosition:
     loan_expiry: u256  # absolute terminal maturity of the current drawn debt (0 == none)
     installments_paid: u256  # on-time installments: the "healthy performance" signal for tranche 2
     first_draw_at: u256  # timestamp of the facility's first drawdown (0 == never drawn)
+    principal_repaid: u256  # cumulative principal (not interest) repaid on this facility
 
 
 class SynapseLiquid(gl.contract.Contract):
@@ -613,6 +627,7 @@ class SynapseLiquid(gl.contract.Contract):
             if int(p.last_assessment_timestamp) > 0
             else 0,
             "first_tranche_cap": str(int(p.credit_limit) * FIRST_TRANCHE_BPS // 10000),
+            "min_drawdown": str(_min_drawdown(int(p.credit_limit))),
         }
 
     @gl.public.view
@@ -650,6 +665,8 @@ class SynapseLiquid(gl.contract.Contract):
             "months_left": left,
             "installments_paid": int(d.installments_paid),
             "first_draw_at": int(d.first_draw_at),
+            "principal_repaid": str(int(d.principal_repaid)),
+            "tranche_two_required_repaid": str(_tranche2_required_repaid(int(p.credit_limit))),
             "tranche_two_opens_at": int(d.first_draw_at) + PAYMENT_CYCLE_SECONDS if int(d.first_draw_at) > 0 else 0,
             "minimum_payment": str(min_payment),
             "total_repaid": str(int(d.total_repaid)),
@@ -804,7 +821,7 @@ class SynapseLiquid(gl.contract.Contract):
             self.borrower_count = int(self.borrower_count) + 1
             self.debts[key] = DebtPosition(
                 principal=0, accrued_interest=0, last_accrual=0, repayment_due=0,
-                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0, installments_paid=0, first_draw_at=0,
+                total_repaid=0, total_interest_paid=0, total_drawn=0, loan_expiry=0, installments_paid=0, first_draw_at=0, principal_repaid=0,
             )
         self.profiles[key] = CreditProfile(
             borrower=gl.message.sender_address,
@@ -915,6 +932,10 @@ class SynapseLiquid(gl.contract.Contract):
             # one full payment cycle must have elapsed since the first drawdown
             if now < int(d.first_draw_at) + PAYMENT_CYCLE_SECONDS:
                 raise gl.vm.UserError(ERR_TRANCHE_COOLDOWN)
+            # ...and real capital must have gone back into the pool: a patient
+            # attacker cannot unlock tranche 2 with a token installment
+            if int(d.principal_repaid) < _tranche2_required_repaid(int(p.credit_limit)):
+                raise gl.vm.UserError(ERR_TRANCHE_AMORTIZATION)
         if principal == 0 and int(self.active_count) >= MAX_ACTIVE_BORROWERS:
             raise gl.vm.UserError(ERR_BORROWER_CAP)
         # Hard protocol-wide ceiling, whoever is borrowing: Sybil identities
@@ -925,7 +946,7 @@ class SynapseLiquid(gl.contract.Contract):
             raise gl.vm.UserError(f"{ERR_EXPECTED} insufficient pool liquidity")
         # Dust floor. The only sub-floor draw allowed is the one that exactly
         # exhausts the remaining headroom of an already-open line.
-        if amount < MIN_DRAWDOWN_AMOUNT and not (
+        if amount < _min_drawdown(int(p.credit_limit)) and not (
             int(d.principal) > 0 and amount == int(p.credit_limit) - int(d.principal)
         ):
             raise gl.vm.UserError(ERR_DRAWDOWN_TOO_SMALL)
@@ -970,6 +991,7 @@ class SynapseLiquid(gl.contract.Contract):
         d.accrued_interest = accrued - interest_part
         d.total_interest_paid = int(d.total_interest_paid) + interest_part
         d.total_repaid = int(d.total_repaid) + pay
+        d.principal_repaid = int(d.principal_repaid) + principal_part
         self._set_principal(key, principal - principal_part)
         p.borrowed_amount = principal - principal_part
         if pay == owed:
