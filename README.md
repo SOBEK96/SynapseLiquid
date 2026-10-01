@@ -2,6 +2,7 @@
 
 **Autonomous under-collateralised debt market and on-chain credit-rating protocol**, built on
 [GenLayer](https://genlayer.com) Studio Next (chain `61997`).
+Repository: <https://github.com/SOBEK96/SynapseLiquid>
 
 Web3 startups with verifiable cash flows (SaaS subscriptions, protocol fees, treasury inflows) apply for
 credit lines against a **proportional underwriting bond** (`max(0.1 GEN, 15% of the requested limit)`). GenVM validators fetch the applicant's JSON
@@ -211,7 +212,7 @@ TELEMETRY_BASE_URL=https://<host>/telemetry ../.venv/bin/python interact_live.py
 * Keys are generated into `.env` (git-ignored, mode `600`): `DEPLOYER`, `AETHER`, `HYPERSCALE`, `ZEROPROOF`.
 * Funding uses the `sim_fundAccount` RPC.
 * **Hosting the telemetry feeds.** Validators fetch `telemetry_uri` server-side, so `telemetry/*.json` must be
-  served over public https (for example a repository's `raw.githubusercontent.com` path). `interact_live.py`
+  served over public https (for example `https://raw.githubusercontent.com/SOBEK96/SynapseLiquid/main/telemetry`). `interact_live.py`
   fetches each feed and verifies its proof digest *before* posting any bond.
 
 | # | Entity | Telemetry | Resolved as |
