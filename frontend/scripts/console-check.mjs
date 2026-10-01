@@ -77,7 +77,29 @@ try {
   // nav must stay a single 64px line
   const nav = await page.$eval("nav", (n) => ({ h: n.getBoundingClientRect().height, wrap: getComputedStyle(n).flexWrap }));
   if (Math.round(nav.h) !== 64 || nav.wrap !== "nowrap") problems.push(`navbar not a single 64px line: ${JSON.stringify(nav)}`);
-  await new Promise((r) => setTimeout(r, 1500));
+  // The About drawer: opens, every tab renders, ESC and backdrop both close it.
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const dialogOpen = () => page.$('[role="dialog"][aria-label="Protocol specifications"]').then(Boolean);
+  await page.click('button[aria-label="Protocol Specs"]');
+  await page.waitForSelector('[role="dialog"] [role="tablist"]', { timeout: 5000 }).catch(() => problems.push("About drawer did not open"));
+  for (const id of ["overview", "arch", "risk", "safe"]) {
+    await page.click(`#about-tab-${id}`).catch(() => problems.push(`About tab ${id} missing`));
+    const sel = await page.$eval(`#about-tab-${id}`, (b) => b.getAttribute("aria-selected")).catch(() => null);
+    const txt = await page.$eval("[role=tabpanel]", (p) => p.textContent ?? "").catch(() => "");
+    if (sel !== "true" || txt.length < 200) problems.push(`About tab ${id} did not render`);
+  }
+  await page.click("#about-tab-risk");
+  const risk = await page.$eval("[role=tabpanel]", (p) => p.textContent ?? "");
+  if (!/Net Operating Income/.test(risk) || !/Net Monthly Burn/.test(risk) || !/35\.00%/.test(risk)) problems.push("risk tab missing formulas or tiers");
+  await page.keyboard.press("Escape");
+  await sleep(500);
+  if (await dialogOpen()) problems.push("ESC did not close the About drawer");
+  await page.click('button[aria-label="Protocol Specs"]');
+  await sleep(400);
+  await page.mouse.click(40, 450); // backdrop, left of the slide-over
+  await sleep(500);
+  if (await dialogOpen()) problems.push("backdrop click did not close the About drawer");
+  await sleep(1000);
 } finally {
   await browser.close();
   server?.kill();

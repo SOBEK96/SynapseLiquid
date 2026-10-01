@@ -1,8 +1,8 @@
-import { ExternalLink, LogOut, Wallet } from "lucide-react";
+import { BookOpen, ExternalLink, LogOut, Wallet } from "lucide-react";
 import { CONTRACT, explorerAddress } from "../lib/chain";
 
-export function Navbar({ account, onConnect, onDisconnect, busy }: {
-  account?: string; onConnect: () => void; onDisconnect: () => void; busy: boolean;
+export function Navbar({ account, onConnect, onDisconnect, busy, onAbout }: {
+  account?: string; onConnect: () => void; onDisconnect: () => void; busy: boolean; onAbout: () => void;
 }) {
   return (
     <nav className="sticky top-0 z-30 flex h-16 flex-nowrap items-center justify-between gap-4 whitespace-nowrap border-b border-slate-800/80 bg-slate-950/85 px-5 backdrop-blur-md">
@@ -25,6 +25,11 @@ export function Navbar({ account, onConnect, onDisconnect, busy }: {
           </span>
           Studio Next <span className="text-emerald-500/60">•</span> <span className="num">61997</span>
         </span>
+
+        <button onClick={onAbout} aria-haspopup="dialog" aria-label="Protocol Specs"
+          className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap rounded-md border border-slate-700/80 px-3 py-1.5 text-xs text-slate-300 transition hover:border-sky-500/60 hover:text-sky-300">
+          <BookOpen size={13} /> <span className="hidden md:inline">Protocol Specs</span>
+        </button>
 
         {CONTRACT ? (
           <a href={explorerAddress(CONTRACT)} target="_blank" rel="noreferrer"

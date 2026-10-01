@@ -8,6 +8,7 @@ import { BorrowerRegistry } from "./components/BorrowerRegistry";
 import { AssessModal } from "./components/AssessModal";
 import { Calculator } from "./components/Calculator";
 import { WalletActions } from "./components/WalletActions";
+import { AboutDrawer } from "./components/AboutDrawer";
 
 interface Toast { id: number; msg: string; kind: "ok" | "err"; href?: string }
 
@@ -19,6 +20,7 @@ export default function App() {
   const [connecting, setConnecting] = useState(false);
   const [selected, setSelected] = useState<string | undefined>();
   const [assessing, setAssessing] = useState<Profile | null>(null);
+  const [about, setAbout] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const alive = useRef(true);
 
@@ -32,7 +34,8 @@ export default function App() {
   useEffect(() => {
     alive.current = true;
     void refresh();
-    const t = window.setInterval(() => void refresh(), 20000);
+    // 60 s and only while visible: the public RPC is rate limited (~30 requests/minute)
+    const t = window.setInterval(() => { if (!document.hidden) void refresh(); }, 60000);
     return () => { alive.current = false; window.clearInterval(t); };
   }, [refresh]);
 
@@ -55,7 +58,7 @@ export default function App() {
 
   return (
     <div className="min-h-full">
-      <Navbar account={account} onConnect={connect} onDisconnect={() => setAccount(undefined)} busy={connecting} />
+      <Navbar account={account} onConnect={connect} onDisconnect={() => setAccount(undefined)} busy={connecting} onAbout={() => setAbout(true)} />
       <main className="mx-auto flex max-w-[1400px] flex-col gap-4 px-4 py-5 lg:px-6">
         {!CONTRACT && (
           <div className="flex items-center gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
@@ -64,7 +67,7 @@ export default function App() {
         )}
         {CONTRACT && failed && !snap && (
           <div className="flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm text-slate-300">
-            <AlertTriangle size={16} className="text-amber-300" /> Studio Next RPC did not answer; retrying every 20 s.
+            <AlertTriangle size={16} className="text-amber-300" /> Studio Next RPC did not answer; retrying every 60 s.
           </div>
         )}
 
@@ -99,6 +102,8 @@ export default function App() {
           SynapseLiquid · GenLayer Studio Next (chain 61997) · test network, no market value. Ratings are model-assisted and bounded by deterministic corridors; not investment advice.
         </footer>
       </main>
+
+      {about && <AboutDrawer onClose={() => setAbout(false)} />}
 
       {assessing && (
         <AssessModal profile={assessing} account={account} usdPerGen={snap?.pool.usd_per_gen ?? 250000}

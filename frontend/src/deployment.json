@@ -173,6 +173,16 @@
       "label": "apply_for_credit ZeroProof Systems",
       "hash": "0x0fb2ae1a4c8a66f9f0013e2984b4c8f8907d8473588b7dde7656211f87b74184",
       "url": "https://explorer-studio-next.genlayer.com/transactions/0x0fb2ae1a4c8a66f9f0013e2984b4c8f8907d8473588b7dde7656211f87b74184"
+    },
+    {
+      "label": "apply_for_credit Phantom Ledger Co (fraud demo)",
+      "hash": "0x4e766802a1b4ec28162ead8aa648ef542afdc6bc63300fa833144250f383e4fd",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x4e766802a1b4ec28162ead8aa648ef542afdc6bc63300fa833144250f383e4fd"
+    },
+    {
+      "label": "assess_credit_consensus Phantom Ledger Co (FRAUD -> bond slashed)",
+      "hash": "0x609c2153474e3e46d52f3cfc669c1e5bdf9c2a4ea5948e1a9f2a54ed9761222e",
+      "url": "https://explorer-studio-next.genlayer.com/transactions/0x609c2153474e3e46d52f3cfc669c1e5bdf9c2a4ea5948e1a9f2a54ed9761222e"
     }
   ]
 }

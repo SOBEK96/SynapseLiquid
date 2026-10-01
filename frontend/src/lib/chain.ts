@@ -130,8 +130,11 @@ export async function loadSnapshot(): Promise<Snapshot | null> {
     const p = await read<Profile>("get_credit_profile", [key]);
     if (!p) continue;
     borrowers.push(p);
-    const s = await read<Schedule>("get_borrower_schedule", [key]);
-    if (s) schedules[key.toLowerCase()] = s;
+    // The public RPC allows ~30 requests/minute: only borrowers with debt need a schedule.
+    if (p.borrowed_amount !== "0") {
+      const s = await read<Schedule>("get_borrower_schedule", [key]);
+      if (s) schedules[key.toLowerCase()] = s;
+    }
   }
   return { pool, borrowers, schedules, at: Date.now() };
 }
